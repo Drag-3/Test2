@@ -14,16 +14,18 @@ def p_program(p):
 # It can be a declaration, an expression, or a control flow statement
 def p_statement(p):
     '''statement : declaration
-                | expression'''
+                | expression SEMICOLON
+                | return_statement SEMICOLON
+                | control_flow
+                | assignment SEMICOLON'''
     p[0] = p[1]  # declaration
 
 
 def p_statement_list(p):
-    '''statement_list : statement SEMICOLON
-                      | statement_list statement SEMICOLON
-                      | statement_list NEWLINE statement SEMICOLON'''
+    '''statement_list : statement
+                      | statement_list statement'''
     if len(p) == 2:  # single statement
-        p[0] = [p[1]]
+        p[0] = (p[1])
     else:  # statement list
         p[0] = p[1] + (p[2],)  # append new statement
 
@@ -43,39 +45,45 @@ def p_arg_list(p):
     '''arg_list : expression
                 | arg_list COMMA expression'''
     if len(p) == 2:  # single argument
-        p[0] = [p[1]]
+        p[0] = (p[1],)
     else:  # argument list
-        p[0] = p[1] + [p[3]]  # append new argument
+        p[0] = p[1] + (p[3],)  # append new argument
 
 
 # Function Definitions
 def p_function_definition(p):
-    '''function_definition : FN IDENTIFIER LPAREN opt_param_list RPAREN LBRACE statement_list RETURN statement RBRACE
-                           | FN IDENTIFIER LPAREN opt_param_list RPAREN typehint LBRACE statement_list RETURN statement RBRACE'''
+    '''function_definition : FN IDENTIFIER LPAREN opt_param_list RPAREN block_statement
+                           | FN IDENTIFIER LPAREN opt_param_list RPAREN typehint block_statement'''
     # Handling optional return type
-    if len(p) == 9:
-        p[0] = ('function_definition', p[2], p[4], None, p[7])
+    if len(p) == 7:
+        p[0] = ('function_definition', p[2], p[4], None, p[6])
     else:
-        p[0] = ('function_definition', p[2], p[4], p[6], p[8])
-
-
-def p_function_body(p):
-    '''function_body : LBRACE statement_list RBRACE'''
-    p[0] = p[2]  # statements
+        p[0] = ('function_definition', p[2], p[4], p[6], p[7])
 
 def p_return_statement(p):
     '''return_statement : RETURN expression'''
     p[0] = ('return', p[2])  # return statement
 
+def p_block_statement(p):
+    '''block_statement : LBRACE statement_list RBRACE'''
+    p[0] = p[2]  # statements
+
 
 def p_lambda_function(p):
-    '''lambda_function : FN LPAREN opt_param_list RPAREN LAMBDA LBRACE statement_list RBRACE
-                       | FN LPAREN opt_param_list RPAREN typehint LAMBDA LBRACE statement_list RBRACE
-                       | LPAREN opt_param_list RPAREN LAMBDA LBRACE statement_list RBRACE
-                       | LPAREN opt_param_list RPAREN typehint LAMBDA LBRACE statement_list RBRACE'''
+    '''lambda_function : FN LPAREN opt_param_list RPAREN LAMBDA block_statement
+                       | FN LPAREN opt_param_list RPAREN typehint LAMBDA block_statement
+                       | LPAREN opt_param_list RPAREN LAMBDA block_statement
+                       | LPAREN opt_param_list RPAREN typehint LAMBDA block_statement'''
     # Handling lambda functions similarly
-    if len(p) == 8:
-        p[0] = ('lambda_function', p[3], None, p[6])
+    if len(p) == 7:
+        if p[1] == 'fn':
+            p[0] = ('lambda_function', p[3], None, p[6])
+        else:
+            p[0] = ('lambda_function', p[2], p[4], p[6])
+    elif len(p) == 8:
+        p[0] = ('lambda_function', p[3], p[5], p[7])
+    elif len(p) == 6:
+        p[0] = ('lambda_function', p[2], None, p[5])
     else:
         p[0] = ('lambda_function', p[3], p[5], p[7])
 
@@ -90,9 +98,9 @@ def p_param_list(p):
     '''param_list : param
                   | param_list COMMA param'''
     if len(p) == 2:  # single param
-        p[0] = [p[1]]
+        p[0] = (p[1],)
     else:  # param list
-        p[0] = p[1] + [p[3]]  # append new param
+        p[0] = p[1] + (p[3],)  # append new param
 
 
 def p_param(p):
@@ -101,12 +109,12 @@ def p_param(p):
     if len(p) == 2:
         p[0] = (p[1], None)
     else:
-        p[0] = (p[1], p[3])  # parameter name, type
+        p[0] = (p[1], p[2])  # parameter name, type
 
 # A declaration is a statement that declares a variable or constant
 def p_declaration(p):
-    '''declaration : VAR declaration_base
-                    | CONST declaration_base
+    '''declaration : VAR declaration_base SEMICOLON
+                    | CONST declaration_base SEMICOLON
                     | function_definition'''
     if len(p) == 2:
         p[0] = p[1]
@@ -157,16 +165,6 @@ def p_primative_type(p):
 # Expressions. An Expression is a line that yields a value.
 # Some examples are function calls, arithmetic operations, etc.
 
-def p_binary_arithmetic_operation(p):
-    '''binary_arithmetic_operation : expression binary_arithmetic_operation_rest
-                        | expression binary_arithmetic_operation_rest
-                        | expression binary_arithmetic_operation_rest
-                        | expression binary_arithmetic_operation_rest
-
-    '''
-
-    p[0] = (p[2], p[1], p[3])
-
 def p_binary_arithmetic_operation_rest(p):
     '''binary_arithmetic_operation_rest : PLUS expression
                         | MINUS expression
@@ -174,6 +172,15 @@ def p_binary_arithmetic_operation_rest(p):
                         | DIVIDE expression
     '''
     p[0] = (p[1], p[2])
+
+def p_binary_arithmetic_operation(p):
+    '''binary_arithmetic_operation : expression binary_arithmetic_operation_rest
+                        | ptype binary_arithmetic_operation_rest
+    '''
+
+    p[0] = (p[2], p[1])
+
+
 
 def p_unary_arithmetic_operation(p):
     '''unary_arithmetic_operation : MINUS expression
@@ -263,7 +270,7 @@ def p_simple_expression(p):
                         | IDENTIFIER
                         | LPAREN expression RPAREN
                         | lambda_function
-                        | control_flow
+
     '''
     p[0] = p[1]
 
@@ -275,12 +282,13 @@ def p_complex_expression(p):
                         | object_call_expression
                         | stream_operation
     '''
-    p[0] = p[1]
+    p[0] = (p[1],)
 
 def p_expression(p):
     '''expression : simple_expression
                 | complex_expression
     '''
+    p[0] = p[1]
 
 def p_control_flow(p):
     '''control_flow : conditional
@@ -289,22 +297,25 @@ def p_control_flow(p):
 
 # Conditional Statements
 def p_conditional(p):
-    '''conditional : IF LPAREN expression RPAREN LBRACE statement_list RBRACE ELSE LBRACE statement_list RBRACE'''
-    p[0] = ('if-else', p[3], p[6], p[10])  # condition, if statements, else statements
-
-def p_conditional_no_else(p):
-    '''conditional : IF LPAREN expression RPAREN LBRACE statement_list RBRACE'''
-    p[0] = ('if', p[3], p[6])  # condition, if statements
+    '''conditional : IF LPAREN expression RPAREN block_statement ELSE block_statement
+                    | IF LPAREN expression RPAREN block_statement'''
+    if len(p) == 7:  # if-else
+        p[0] = ('if-else', p[3], p[5], p[7])  # condition, if statements, else statements
+    else:  # if
+        p[0] = ('if', p[3], p[5])  # condition, if statements
 
 # Loops
 def p_loop(p):
-    '''loop : FOR LPAREN declaration SEMICOLON expression SEMICOLON expression RPAREN LBRACE statement_list RBRACE
-            | WHILE LPAREN expression RPAREN LBRACE statement_list RBRACE'''
+    '''loop : FOR LPAREN declaration SEMICOLON expression SEMICOLON expression RPAREN block_statement
+            | WHILE LPAREN expression RPAREN block_statement'''
     if len(p) == 8:  # while loop
         p[0] = ('while', p[3], p[6])  # condition, statements
     else:  # for loop
         p[0] = ('for', p[3], p[5], p[7], p[10])  # declaration, condition, increment, statements
 
+def p_assignment(p):
+    '''assignment : IDENTIFIER ASSIGN expression'''
+    p[0] = ('assignment', p[1], p[3])  # variable, expression
 
 
 # Empty Rule
@@ -353,7 +364,7 @@ parser = yacc.yacc(debug=True)
 def parse(data, lexer=lexer):
     global string_lines
     string_lines = data.splitlines()
-    return parser.parse(data, lexer=lexer)
+    return parser.parse(data, lexer=lexer, tracking=True, debug=True)
 
 
 # Section: Testing and Debugging (Optional)
@@ -372,6 +383,8 @@ if __name__ == "__main__":
             return false;
         }
     }
+    
+    //main();
     """
     test_string = '''
 var dataStream = socket.toStream(); // Create a stream from a socket
@@ -434,6 +447,6 @@ output >> sensorData;  // Chain the output to the input
 // This will create the same feedback loop as the following code
 sensorData >> output << sensorData; //Feedback implicitly defines the output stream and chains it to the input stream
 '''
-    string_lines = simple_test_string.splitlines()
-    result = parse(simple_test_string, lexer)
+   # string_lines = simple_test_string.splitlines()
+    result = parse(test_string, lexer)
     print(result)

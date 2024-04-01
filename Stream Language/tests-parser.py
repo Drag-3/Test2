@@ -40,6 +40,30 @@ tests = [
         }
     }
     """,
+    """
+    fn add(x: int, y: int): int {
+        return x + y;
+    }
+    """,
+    """
+    fn add(x, y: int) {
+        return x + y;
+    }
+    """,
+    """
+    fn add(x, y): int {
+        return x + y;
+    }
+    """,
+    """
+    var stream_test = socket.toStream();
+    """,
+    """
+    var stream_test = socket.toStream();
+    var stream_test2 = socket.toStream();
+    stream_test >> stream_test2;
+    """,
+
 ]
 
 
@@ -47,6 +71,7 @@ def build_tree(result: tuple[tuple[tuple[..., ...], ...], ...]):
     if result:
         if isinstance(result, tuple):
             for x in result:
+                print('\t', end='')
                 build_tree(x)
         else:
             print(result)
@@ -57,4 +82,6 @@ for x, test in enumerate(tests):
     result = parse(test)
     print(f"Test {x}")
     print(test)
+    print(result)
     build_tree(result)
+    print("=" * 20)

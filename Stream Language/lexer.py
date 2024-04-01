@@ -2,7 +2,7 @@ from ply import lex
 
 DATA_TYPES = ('INT', 'FLOAT', 'STRING', 'STREAM', 'EVENT')
 DATA_TYPE_IDENTIFIERS = ('SINT', 'SFLOAT', 'SSTRING', 'SEVENT', 'SSTREAM', 'SBOOL')
-OPERATORS = ('PLUS', 'MINUS', 'MULTIPLY', 'DIVIDE', 'EQUALS', 'GT', 'LT', 'GE', 'LE', 'AND', 'OR', 'NOT')
+OPERATORS = ('PLUS', 'MINUS', 'MULTIPLY', 'DIVIDE', 'EQUALS', 'GT', 'LT', 'GE', 'LE', 'AND', 'OR', 'NOT', 'NE')
 
 SPECIFIC_OPERATORS = ('TO_STREAM', 'CHAIN', 'ATTACH', 'CALL', 'FILTEROP', 'MAP', 'REDUCE', 'LAMBDA',
                       'STREAMSPLIT', 'STREAMMERGE', 'FEEDBACK', 'ASSIGN')
@@ -11,7 +11,7 @@ KEYWORDS = ('FN', 'IF', 'ELSE', 'FOR', 'WHILE', 'RETURN', 'TRUE', 'FALSE', 'VAR'
 STRUCTURE = ('LPAREN', 'RPAREN', 'LBRACE', 'RBRACE', 'COMMA',
                 'SEMICOLON', 'TYPEHINTCOLON', 'NEWLINE')
 
-tokens = DATA_TYPES + DATA_TYPE_IDENTIFIERS + OPERATORS + SPECIFIC_OPERATORS + KEYWORDS + STRUCTURE + ('IDENTIFIER',)
+tokens = DATA_TYPES + DATA_TYPE_IDENTIFIERS + OPERATORS + SPECIFIC_OPERATORS + KEYWORDS + STRUCTURE + ('IDENTIFIER','EOF')
 
 states = (
     ('MULTILINECOMMENT', 'exclusive'),
@@ -41,11 +41,22 @@ reserved = {
     # Add other reserved words here
 }
 
+precedence = (
+    ('left', 'ASSIGN'),
+    ('left', 'PLUS', 'MINUS'),
+    ('left', 'MULTIPLY', 'DIVIDE'),
+    ('right', 'UMINUS'),
+    ('right', 'NOT'),
+    ('left', 'AND', 'OR'),
+
+)
+
 t_PLUS    = r'\+'
 t_MINUS   = r'-'
 t_MULTIPLY = r'\*'
 t_DIVIDE  = r'/'
 t_EQUALS  = r'=='
+t_NE      = r'!='
 t_GT      = r'>'
 t_LT      = r'<'
 t_GE      = r'>='
@@ -156,7 +167,8 @@ def t_error(t):
     print(f"Illegal character '{t.value[0]}'")
     t.lexer.skip(1)
 
-
+def t_eof(t):
+    return None
 
 
 if __name__ == '__main__':
