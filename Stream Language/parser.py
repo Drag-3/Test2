@@ -73,7 +73,8 @@ def p_lambda_function(p):
     '''lambda_function : FN LPAREN opt_param_list RPAREN LAMBDA block_statement
                        | FN LPAREN opt_param_list RPAREN typehint LAMBDA block_statement
                        | LPAREN opt_param_list RPAREN LAMBDA block_statement
-                       | LPAREN opt_param_list RPAREN typehint LAMBDA block_statement'''
+                       | LPAREN opt_param_list RPAREN typehint LAMBDA block_statement
+                       | LPAREN opt_param_list RPAREN LAMBDA logic_expression'''
     # Handling lambda functions similarly
     if len(p) == 7:
         if p[1] == 'fn':
@@ -230,7 +231,7 @@ def p_function_call_expression(p):
     p[0] = p[1]
 
 def p_object_call_expression(p):
-    '''object_call_expression : expression CALL expression
+    '''object_call_expression : expression CALL function_call_expression
     '''
     p[0] = (p[2], p[1], p[3])
 
@@ -256,11 +257,10 @@ def p_binary_stream_operation(p):
     p[0] = (p[2], p[1], p[3])
 
 def p_special_stream_operation(p):
-    '''special_stream_operation : IDENTIFIER FILTEROP LPAREN logic_expression RPAREN
-                        | IDENTIFIER MAP LPAREN logic_expression RPAREN
-                        | IDENTIFIER REDUCE LPAREN logic_expression RPAREN
+    '''special_stream_operation : expression FILTEROP LPAREN lambda_function RPAREN expression
+                        | expression MAP LPAREN lambda_function RPAREN expression
+                        | expression REDUCE LPAREN lambda_function RPAREN expression
     '''
-    p[0] = (p[2], p[1], p[4])
 
 
 
@@ -287,7 +287,12 @@ def p_complex_expression(p):
 def p_expression(p):
     '''expression : simple_expression
                 | complex_expression
+                | LPAREN expression RPAREN
+
     '''
+    if len(p) > 2:
+        p[0] = p[2]
+        return
     p[0] = p[1]
 
 def p_control_flow(p):
@@ -316,6 +321,7 @@ def p_loop(p):
 def p_assignment(p):
     '''assignment : IDENTIFIER ASSIGN expression'''
     p[0] = ('assignment', p[1], p[3])  # variable, expression
+
 
 
 # Empty Rule
@@ -361,10 +367,10 @@ parser = yacc.yacc(debug=True)
 
 
 # Section: Parsing Function
-def parse(data, lexer=lexer):
+def parse(data, lexer=lexer, debug=False):
     global string_lines
     string_lines = data.splitlines()
-    return parser.parse(data, lexer=lexer, tracking=True, debug=True)
+    return parser.parse(data, lexer=lexer, tracking=True, debug=debug)
 
 
 # Section: Testing and Debugging (Optional)
@@ -398,7 +404,7 @@ Convert on each data entry
 */
 dataStream.onEntry(processData); // Process each data entry as they arrive
 
-dataStream ? (data => data > 0) $ (data => data * 2) ^ (data => data + 1); // Filter, map, and reduce
+dataStream ? ((data) => data > 0) $ ((data) => data * 2) ^ ((data) => data + 1); // Filter, map, and reduce
 dataStream >> output; // Chain the output stream
 /*
 First process the data (events are handled before filters)
@@ -448,5 +454,7 @@ output >> sensorData;  // Chain the output to the input
 sensorData >> output << sensorData; //Feedback implicitly defines the output stream and chains it to the input stream
 '''
    # string_lines = simple_test_string.splitlines()
-    result = parse(test_string, lexer)
+    result = parse(test_string, lexer, True)
     print(result)
+
+# I need to add special rules that determine how the stream expressions work. IE filters, maps need a condition etc
