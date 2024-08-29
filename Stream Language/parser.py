@@ -1,5 +1,13 @@
 import ply.yacc as yacc
 from lexer import tokens, lexer
+from a_model import (
+    ProgramNode, IfNode, WhileNode, ForNode, AssignmentNode, FunctionNode,
+    FunctionCallNode, ReturnNode, VariableDeclarationNode, IdentifierNode,
+    PrimitiveIntNode, PrimitiveFloatNode, PrimitiveStringNode, BinaryOperationNode,
+    UnaryOperationNode, Context, LambdaNode, ApplyNode, TryCatchNode,
+    ParserError, StreamType
+)
+
 
 
 
@@ -8,7 +16,7 @@ from lexer import tokens, lexer
 # Program Structure
 def p_program(p):
     '''program : statement_list'''
-    p[0] = ('program', p[1])
+    p[0] = ProgramNode(p[1])  # program
 
 # A statement is a single line of code that performs an action
 # It can be a declaration, an expression, or a control flow statement
@@ -56,13 +64,13 @@ def p_function_definition(p):
                            | FN IDENTIFIER LPAREN opt_param_list RPAREN typehint block_statement'''
     # Handling optional return type
     if len(p) == 7:
-        p[0] = ('function_definition', p[2], p[4], None, p[6])
+        p[0] = FunctionNode(p[2], p[4], p[6])
     else:
-        p[0] = ('function_definition', p[2], p[4], p[6], p[7])
+        p[0] = FunctionNode(p[2], p[4], p[7], return_type=p[6])
 
 def p_return_statement(p):
     '''return_statement : RETURN expression'''
-    p[0] = ('return', p[2])  # return statement
+    p[0] = ReturnNode(p[2])  # return statement
 
 def p_block_statement(p):
     '''block_statement : LBRACE statement_list RBRACE'''
@@ -118,9 +126,12 @@ def p_declaration(p):
                     | CONST declaration_base SEMICOLON
                     | function_definition'''
     if len(p) == 2:
-        p[0] = p[1]
+        p[0] = p[1]  # This is a function definition
     else:
-        p[0] = ('declaration', p[1], p[2])  # var/const, declaration
+        identifier = IdentifierNode(p[2][0])
+        type_hint = p[2][1] if p[2][1] else None
+        value = p[2][2] if p[2][2] else None
+        p[0] = VariableDeclarationNode(identifier, type_hint, value)  # variable declaration
 
 
 # Variable Declaration
@@ -187,7 +198,7 @@ def p_unary_arithmetic_operation(p):
     '''unary_arithmetic_operation : MINUS expression
                         | PLUS expression
     '''
-    p[0] = (p[1], p[2])
+    p[0] = UnaryOperationNode(p[1], p[2])
 
 def p_binary_logic_operation(p):
     '''binary_logic_operation : expression binary_logic_operation_rest
