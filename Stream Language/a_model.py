@@ -88,16 +88,18 @@ class IfNode(ParserNode):
 
     def evaluate(self, context):
         try:
+            return_val = None
             if self.condition.evaluate(context):
                 context.enter_block(self.then_block_uuid)
                 for node in self.then_block:
-                    node.evaluate(context)
+                    return_val = node.evaluate(context)
                 context.exit_block()
             elif self.else_block:
                 context.enter_block(self.else_block_uuid)
                 for node in self.else_block:
-                    node.evaluate(context)
+                    return_val = node.evaluate(context)
                 context.exit_block()
+            return return_val
         except Exception as e:
             self.handle_error(e, context)
 
@@ -307,7 +309,7 @@ class BinaryOperationNode(ParserNode):
     """
 
     def __init__(self, operator, left, right):
-        super().__init__(operator)  # Generate a unique UUID for this binary operation
+        super().__init__(operator)
         self.operator = operator
         self.left = left
         self.right = right
@@ -316,27 +318,25 @@ class BinaryOperationNode(ParserNode):
         return [self.left, self.right]
 
     def evaluate(self, context):
-        try:
-            context.enter_block(self.block_uuid)  # Enter the block for this binary operation
+        # Evaluate left and right operands
+        left_value = self._extract_value(self.left.evaluate(context))
+        right_value = self._extract_value(self.right.evaluate(context))
 
-            # Evaluate the left and right operands
-            left_value = self.left.evaluate(context)
-            right_value = self.right.evaluate(context)
+        # Perform the operation
+        if self.operator in ['+', '-', '*', '/']:
+            return self.evaluate_arithmetic(left_value, right_value)
+        elif self.operator in ['&&', '||', '<', '>', '==', '!=', '<=', '>=']:
+            return self.evaluate_logical(left_value, right_value)
+        elif self.operator in ['>>', '|', '++', '<<']:
+            return self.evaluate_stream(left_value, right_value)
+        else:
+            raise ValueError(f"Unsupported operator: {self.operator}")
 
-            # Perform the appropriate operation based on the operator
-            if self.operator in ['+', '-', '*', '/']:
-                result = self.evaluate_arithmetic(left_value, right_value)
-            elif self.operator in ['&&', '||']:
-                result = self.evaluate_logical(left_value, right_value)
-            elif self.operator in ['>>', '|', '++', '<<']:
-                result = self.evaluate_stream(left_value, right_value)
-            else:
-                raise ValueError(f"Unsupported operator: {self.operator}")
-
-            context.exit_block()  # Exit the block after the operation
-            return result
-        except Exception as e:
-            self.handle_error(e, context)
+    def _extract_value(self, entry):
+        """Extracts the value from a SymbolTableEntry if necessary."""
+        if isinstance(entry, SymbolTableEntry):
+            return entry.value
+        return entry
 
     def evaluate_arithmetic(self, left_value, right_value):
         if self.operator == '+':
@@ -355,6 +355,18 @@ class BinaryOperationNode(ParserNode):
             return left_value and right_value
         elif self.operator == '||':
             return left_value or right_value
+        elif self.operator == '<':
+            return left_value < right_value
+        elif self.operator == '>':
+            return left_value > right_value
+        elif self.operator == '==':
+            return left_value == right_value
+        elif self.operator == '!=':
+            return left_value != right_value
+        elif self.operator == '<=':
+            return left_value <= right_value
+        elif self.operator == '>=':
+            return left_value >= right_value
 
     def evaluate_stream(self, left_value, right_value):
         # Placeholder: Replace with actual logic for handling streams in your system
@@ -368,35 +380,34 @@ class BinaryOperationNode(ParserNode):
             return left_value.feedback(right_value)
 
     def get_type(self, context):
-        try:
-            context.enter_block(self.block_uuid)  # Enter the block for type checking
+        left_type = self._extract_type(self.left.get_type(context))
+        right_type = self._extract_type(self.right.get_type(context))
 
-            left_type = self.left.get_type(context)
-            right_type = self.right.get_type(context)
+        if left_type != right_type:
+            raise TypeError(f"Type mismatch: cannot perform '{self.operator}' between {left_type.__name__} and {right_type.__name__}")
 
-            if left_type != right_type:
-                raise TypeError(f"Type mismatch: cannot perform '{self.operator}' between {left_type.__name__} and {right_type.__name__}")
-
-            # Determine the result type based on the operation
-            if self.operator == '/' and all(issubclass(t, int) for t in [left_type, right_type]):
-                result_type = float
-            elif self.operator in ['&&', '||']:
-                if left_type == bool and right_type == bool:
-                    result_type = bool
-                else:
-                    raise TypeError("Logical operations require boolean types")
-            elif self.operator in ['>>', '|', '++', '<<']:
-                result_type = self.determine_stream_type(left_type, right_type)
+        # Define type rules for each category of operations
+        if self.operator in ['/'] and all(issubclass(t, int) for t in [left_type, right_type]):
+            return float
+        elif self.operator in ['&&', '||']:
+            if left_type == bool and right_type == bool:
+                return bool
             else:
-                result_type = left_type  # For arithmetic and other operations
+                raise TypeError("Logical operations require boolean types")
+        elif self.operator in ['>>', '|', '++', '<<']:
+            # Stream operations may have specific type requirements or implications
+            return self.determine_stream_type(left_type, right_type)
+        else:
+            return left_type  # For arithmetic and other operations
 
-            context.exit_block()  # Exit the block after type checking
-            return result_type
-        except Exception as e:
-            self.handle_error(e, context)
+    def _extract_type(self, entry_type):
+        """Extracts the type from a SymbolTableEntry if necessary."""
+        if isinstance(entry_type, SymbolTableEntry):
+            return entry_type.type
+        return entry_type
 
     def determine_stream_type(self, left_type, right_type):
-        # Placeholder for stream type determination logic
+        # Placeholder: Implement logic for determining the type for stream operations
         return type("Stream", (object,), {})  # Example of a generic Stream type
 
     def handle_error(self, error, context):
@@ -422,37 +433,30 @@ class UnaryOperationNode(ParserNode):
     """
 
     def __init__(self, operator, operand):
-        super().__init__(operator, block_uuid=str(uuid.uuid4()))  # Generate a unique UUID for this unary operation
+        super().__init__(operator)
         self.operator = operator
         self.operand = operand
 
     def children(self):
-        # Returns the operand as the only child node
         return [self.operand]
 
     def evaluate(self, context):
-        """
-        Evaluate the unary operation within the given context.
-        The actual operation performed depends on the operator type.
-        """
-        try:
-            context.enter_block(self.block_uuid)  # Enter the block for this unary operation
+        operand_value = self._extract_value(self.operand.evaluate(context))
 
-            operand_value = self.operand.evaluate(context)
+        if self.operator in ['+', '-']:
+            return self.evaluate_arithmetic(operand_value)
+        elif self.operator == '!':
+            return self.evaluate_logical(operand_value)
+        elif self.operator == '.to_stream()':
+            return self.evaluate_stream(operand_value)
+        else:
+            raise ValueError(f"Unsupported unary operator: {self.operator}")
 
-            if self.operator in ['+', '-']:
-                result = self.evaluate_arithmetic(operand_value)
-            elif self.operator == '!':
-                result = self.evaluate_logical(operand_value)
-            elif self.operator == '.to_stream()':
-                result = self.evaluate_stream(operand_value)
-            else:
-                raise ValueError(f"Unsupported unary operator: {self.operator}")
-
-            context.exit_block()  # Exit the block after the operation
-            return result
-        except Exception as e:
-            self.handle_error(e, context)
+    def _extract_value(self, entry):
+        """Extracts the value from a SymbolTableEntry if necessary."""
+        if isinstance(entry, SymbolTableEntry):
+            return entry.value
+        return entry
 
     def evaluate_arithmetic(self, operand_value):
         if self.operator == '+':
@@ -470,30 +474,26 @@ class UnaryOperationNode(ParserNode):
         return "to_stream(operand_value)"
 
     def get_type(self, context):
-        """
-        Determine and return the type of the unary operation.
-        Different operations may have different type implications.
-        """
-        try:
-            context.enter_block(self.block_uuid)  # Enter the block for type checking
+        operand_type = self._extract_type(self.operand.get_type(context))
 
-            operand_type = self.operand.get_type(context)
+        if self.operator in ['+', '-']:
+            return operand_type  # Preserves the type of the operand
+        elif self.operator == '!':
+            if operand_type != bool:
+                raise TypeError("Logical negation requires a boolean type")
+            return bool
+        elif self.operator == '.to_stream()':
+            # Define a type for stream objects if it's a custom class
+            return StreamType
+        else:
+            raise TypeError("Unsupported unary operator for type checking")
 
-            if self.operator in ['+', '-']:
-                result_type = operand_type  # Preserves the type of the operand
-            elif self.operator == '!':
-                if operand_type != bool:
-                    raise TypeError("Logical negation requires a boolean type")
-                result_type = bool
-            elif self.operator == '.to_stream()':
-                result_type = StreamType  # Define a type for stream objects if it's a custom class
-            else:
-                raise TypeError(f"Unsupported unary operator: {self.operator}")
+    def _extract_type(self, entry_type):
+        """Extracts the type from a SymbolTableEntry if necessary."""
+        if isinstance(entry_type, SymbolTableEntry):
+            return entry_type.type
+        return entry_type
 
-            context.exit_block()  # Exit the block after type checking
-            return result_type
-        except Exception as e:
-            self.handle_error(e, context)
 
     def handle_error(self, error, context):
         error_message = f"Error in unary operation block UUID {self.block_uuid}: {str(error)}"
@@ -524,31 +524,31 @@ class FunctionCallNode(ParserNode):
         try:
             context.enter_block(self.block_uuid)  # Enter the block for this function call
 
-            func = self.function.evaluate(context)
+            # Lookup the function in the symbol table
+            func = context.lookup_function(self.function.name)
+
             args_values = [arg.evaluate(context) for arg in self.arguments]
-            result = func.invoke(args_values, context)
+            result = func.invoke(*args_values, context=context)
 
             context.exit_block()  # Exit the block after the function call
             return result
         except RecursionError as re:
             raise ParserError(f"Infinite recursion detected in function '{self.function.name}': {str(re)}", node=self)
         except Exception as e:
+            context.exit_block()
             self.handle_error(e, context)
 
     def get_type(self, context):
         try:
             context.enter_block(self.block_uuid)  # Enter the block for type checking
 
-            # Resolve the function from the context
-            func = self.function.evaluate(context)
+            # Lookup the function in the symbol table
+            func_entry = context.lookup(self.function.name)
+            if not func_entry or func_entry.entry_type != 'function':
+                raise FunctionNotFoundError(f"Function '{self.function.name}' is not defined")
 
-            # Check if func is actually a function and has a return type
-            if not hasattr(func, 'return_type') or func.return_type is None:
-                # Infer the return type from the function body if not explicitly provided
-                inferred_return_type = self.infer_return_type(func, context)
-                func.return_type = inferred_return_type  # Set the inferred type as the function's return type
-            else:
-                inferred_return_type = func.return_type
+            func = func_entry.value
+            return_type = func.get_type(context)
 
             # Check the types of the arguments against the function's parameter types
             if len(self.arguments) != len(func.parameters):
@@ -568,9 +568,9 @@ class FunctionCallNode(ParserNode):
                         f"for parameter '{param_node.name}' in function '{self.function.name}'", node=self)
 
             context.exit_block()  # Exit the block after type checking
-            # Return the function's inferred or explicit return type
-            return inferred_return_type
+            return return_type
         except Exception as e:
+            context.exit_block()
             self.handle_error(e, context)
 
     def infer_return_type(self, func, context):
@@ -629,11 +629,13 @@ class ReturnNode(ParserNode):
                 return_value = self.value.evaluate(context)
                 context.handle_return(return_value)
                 context.exit_block()  # Exit the block after evaluating the return value
-                return return_value
+                raise ReturnException(return_value)  # Raise a signal to return the value
             else:
                 context.handle_return(None)
                 context.exit_block()  # Exit the block even if there's no return value
                 return None
+        except ReturnException as re:
+            raise re  # Propagate the return signal to the caller
         except Exception as e:
             self.handle_error(e, context)
 
@@ -709,12 +711,15 @@ class IdentifierNode(ParserNode):
         except Exception as e:
             self.handle_error(e, context)
 
-    def get_type(self, context):
+    def get_type(self, context = None):
         """
         Determine and return the type of the identifier by looking it up in the context.
         This is essential for type checking and ensuring the identifier is used correctly according to its type.
         """
         try:
+            if context is None:
+                raise ValueError("Context must be provided for type checking")
+
             context.enter_block(self.block_uuid)  # Enter the block for type checking
 
             if not context.is_declared(self.name):
@@ -844,6 +849,7 @@ class VariableDeclarationNode(ParserNode):
         """
         Evaluate the variable declaration within the given context.
         This involves optionally initializing the variable and updating the context with its value and type.
+        This evaluation does not return a value, as it is a declaration statement.
         """
         try:
             # Check if the variable is already declared in the current scope
@@ -963,51 +969,45 @@ class FunctionNode(ParserNode):
     def evaluate(self, context):
         """
         Evaluate the function definition within the given context.
-        This registers the function in the context.
+        Store the function in the global symbol table.
         """
         try:
-            context.enter_block(self.block_uuid)  # Enter the block for this function definition
-
-            # Create a new context for the function itself
-            function_context = Context(parent=context)
-            for param in self.parameters:
-                function_context.declare_variable(param.name)
-            context.store_function(self.name, self, function_context)
-
-            # Perform static analysis for infinite recursion
-            self.check_for_infinite_recursion(function_context)
-
-            context.exit_block()  # Exit the block after evaluating the function definition
+            # Store the function as a Callable in the symbol table
+            callable_function = CallableFunction(self.name, self.parameters, self.body, self.return_type)
+            context.declare_function(self.name, callable_function, global_scope=False)
         except Exception as e:
             self.handle_error(e, context)
 
-    def invoke(self, args, context):
+    def invoke(self, *args, context):
         """
         Invoke the function with the provided arguments within the given context.
         """
         try:
             context.enter_function_call(self.name)  # Track function call
-            if len(args) != len(self.parameters):
-                raise ValueError(f"Function '{self.name}' expects {len(self.parameters)} arguments, got {len(args)}")
+            context.enter_block(self.block_uuid)
 
-            local_context = Context(parent=context)
+            # Create a new scope for function parameters
+            context.enter_scope()
             for param, arg in zip(self.parameters, args):
-                local_context.assign(param.name, arg.evaluate(context))
+                param_type = param.get_type(context)
+                context.symbol_table.store(param.name, SymbolTableEntry(value=arg.evaluate(context), entry_type=param_type))
 
             return_value = None
-            for node in self.body:
-                result = node.evaluate(local_context)
-                if isinstance(node, ReturnNode):
-                    return_value = result
-                    break
+            try:
+                for node in self.body:
+                    node.evaluate(context)
+            except ReturnException as re:
+                return_value = re.value
 
+            context.exit_scope()
+            context.exit_block()
             context.exit_function_call(self.name)  # Untrack function call
             return return_value
-        except RecursionError as re:
-            raise ParserError(f"Potential infinite recursion detected in function '{self.name}': {str(re)}", node=self)
         except Exception as e:
+            context.exit_scope()
+            context.exit_block()
+            context.exit_function_call(self.name)  # Ensure proper cleanup on error
             self.handle_error(e, context)
-            context.exit_function_call(self.name)  # Ensure exit on error
 
     def check_for_infinite_recursion(self, context):
         """ Perform static analysis to detect potential infinite recursion """
@@ -1033,70 +1033,91 @@ class FunctionNode(ParserNode):
         return False
 
     def get_type(self, context):
-        """
-        Determine the function's return type.
-        If not explicitly provided, infer from return statements.
-        """
         try:
             context.enter_block(self.block_uuid)  # Enter the block for type inference
 
             if self.return_type:
                 result_type = self.return_type  # Use the explicitly provided return type
             else:
-                result_type = None
-                for node in self.body:
-                    if isinstance(node, ReturnNode):
-                        inferred_type = node.get_type(context)
-                        if result_type is None:
-                            result_type = inferred_type
-                        elif result_type != inferred_type:
-                            raise TypeError(f"Conflicting return types in function '{self.name}': "
-                                            f"{result_type} and {inferred_type}")
+                result_type = self.infer_return_type(context)
 
             context.exit_block()  # Exit the block after type inference
             return result_type
         except Exception as e:
             self.handle_error(e, context)
 
+    def infer_return_type(self, context):
+        """
+        Infer the return type by analyzing the function's body.
+        """
+        return_types = [node.get_type(context) for node in self.body if isinstance(node, ReturnNode)]
+        if len(set(return_types)) == 1:
+            return return_types[0]
+        elif return_types:
+            raise TypeError(f"Function '{self.name}' has inconsistent return types")
+        return None
+
     def handle_error(self, error, context):
         error_message = f"Error in function '{self.name}' with block UUID {self.block_uuid}: {str(error)}"
         raise ParserError(error_message, node=self)
 
 
+
 class LambdaNode(ParserNode):
     def __init__(self, parameters, body):
-        super().__init__('lambda', block_uuid=str(uuid.uuid4()))  # Generate a unique UUID for this lambda node
+        super().__init__('lambda', block_uuid=str(uuid.uuid4()))
         self.parameters = parameters  # List of IdentifierNodes for parameters
-        self.body = body  # Body of the lambda, typically a single return expression
+        self.body = body              # Body of the lambda, typically a single return expression
 
     def children(self):
         return self.parameters + [self.body]
 
     def evaluate(self, context):
         try:
-            context.enter_block(self.block_uuid)  # Enter the block for this lambda node
             return lambda *args: self.invoke(args, context)
         except Exception as e:
             self.handle_error(e, context)
-        finally:
-            context.exit_block()  # Ensure we exit the block after evaluation
 
-    def invoke(self, args, context):
+    def invoke(self, *args, context):
         try:
-            local_context = Context(parent=context)
+            context.enter_scope()
+            context.enter_block(self.block_uuid)
+
+            # Bind parameters to arguments in a new scope
             for param, arg in zip(self.parameters, args):
-                local_context.assign(param.name, arg)
-            return self.body.evaluate(local_context)
+                # If the parameter type is not yet set, infer it from the argument
+                if not context.is_declared(param.name):
+                    inferred_type = type(arg)
+                    context.declare_variable(param.name, t=inferred_type, value=arg)
+                else:
+                    context.assign(param.name, arg)
+
+            result = self.body.evaluate(context)
+
+            context.exit_block()
+            context.exit_scope()
+            return result
         except Exception as e:
+            context.exit_block()
+            context.exit_scope()
             self.handle_error(e, context)
 
     def get_type(self, context):
+        """
+        Infer the type of the lambda expression based on the return type of its body.
+        """
         try:
-            context.enter_block(self.block_uuid)  # Enter the block for type inference
+            context.enter_scope()
+            context.enter_block(self.block_uuid)
+
             return_type = self.body.get_type(context)
-            context.exit_block()  # Exit the block after type inference
+
+            context.exit_block()
+            context.exit_scope()
             return return_type
         except Exception as e:
+            context.exit_block()
+            context.exit_scope()
             self.handle_error(e, context)
 
     def handle_error(self, error, context):
@@ -1128,10 +1149,19 @@ class ApplyNode(ParserNode):
         try:
             context.enter_block(self.block_uuid)  # Enter the block for type inference
             func_type = self.function.get_type(context)
+
+            # Ensure that the function's return type is consistent
+            if isinstance(func_type, list) and len(func_type) == len(self.arguments):
+                for arg, expected_type in zip(self.arguments, func_type):
+                    arg_type = arg.get_type(context)
+                    if arg_type != expected_type:
+                        raise TypeError(f"Argument type mismatch: expected {expected_type}, got {arg_type}")
+
             context.exit_block()  # Exit the block after type inference
             return func_type
         except Exception as e:
             self.handle_error(e, context)
+
 
     def handle_error(self, error, context):
         error_message = f"Error in apply operation with block UUID {self.block_uuid}: {str(error)}"
@@ -1145,20 +1175,92 @@ class ApplyNode(ParserNode):
 #     def children(self):
 #         return self.arguments
 
+class SymbolTableEntry:
+    def __init__(self, identifier, t=None, value=None):
+        self.identifier = identifier  # The name of the variable or symbol
+        self.type = t  # The type of the symbol (optional)
+        self.value = value  # The value associated with the symbol (optional)
+        self.scope_level = None
+        self.is_constant = False
+
+    def __repr__(self):
+        return f"SymbolTableEntry(identifier={self.identifier}, type={self.type}, value={self.value}, scope_level={self.scope_level}, is_constant={self.is_constant})"
+
+class SymbolTable:
+    def __init__(self):
+        self.table = {}  # Dictionary to store symbols
+
+    def declare(self, identifier, t=None, value=None, is_constant=False):
+        if identifier in self.table:
+            raise VariableNotDeclaredError(f"Variable '{identifier}' already declared in this scope")
+        entry = SymbolTableEntry(identifier, t, value)
+        entry.is_constant = is_constant
+        self.table[identifier] = entry
+
+    def update(self, identifier, value):
+        if identifier not in self.table:
+            raise VariableNotDeclaredError(f"Variable '{identifier}' is not declared")
+
+        entry = self.table[identifier]
+
+        if entry.is_constant:
+            raise Exception(f"Cannot reassign value to constant '{identifier}'")
+
+        # Determine the type of the new value
+        new_type = type(value)
+
+        if entry.type is None:
+            # If the type hasn't been set, set it now
+            entry.type = new_type
+        elif entry.type != new_type:
+            raise TypeError(
+                f"Type mismatch for variable '{identifier}': expected {entry.type.__name__}, but got {new_type.__name__}")
+
+        # Update the value
+        entry.value = value
+
+    def lookup(self, identifier):
+        if identifier not in self.table:
+            raise VariableNotDeclaredError(f"Variable '{identifier}' is not declared")
+        return self.table[identifier]
+
+    def is_declared(self, identifier):
+        return identifier in self.table
+
+    def copy(self):
+        new_table = SymbolTable()
+        new_table.table = self.table.copy()
+        return new_table
+
+    def __getitem__(self, identifier):
+        return self.lookup(identifier).value
+
+    def __setitem__(self, identifier, value):
+        self.update(identifier, value)
+
+    def __contains__(self, identifier):
+        return identifier in self.table
+
+    def __repr__(self):
+        return f"SymbolTable({self.table})"
 
 class Context:
     MAX_RECURSION_DEPTH = 1000  # Set a limit to prevent stack overflow or infinite recursion
 
+
+
     def __init__(self, parent=None):
         self.parent = parent
-        self.global_symbol_table = self._get_global_symbol_table() if parent else {}
-        self.local_symbol_tables = [{}]  # Ensure at least one local scope
+        self.global_symbol_table = SymbolTable() if parent is None else parent.global_symbol_table
+        self.local_symbol_tables = [SymbolTable()]  # Stack of local symbol tables
         self.function_calls = []
         self.blocks_stack = []  # Stack to manage block UUIDs
         self.recursion_depth = {}
         self.current_block_uuid = None
         self.call_stack = []  # Stack to maintain function call trace
         self.loop_stack = []  # Stack to manage loop states
+
+
     def _get_global_symbol_table(self):
         if self.parent:
             return self.parent._get_global_symbol_table()
@@ -1169,8 +1271,8 @@ class Context:
         context = self
         while context is not None:
             for symbol_table in reversed(context.local_symbol_tables):
-                if identifier in symbol_table:
-                    return symbol_table[identifier]
+                if symbol_table.is_declared(identifier):
+                    return symbol_table.lookup(identifier).type
             context = context.parent
 
         if identifier in self.global_symbol_table:
@@ -1183,49 +1285,43 @@ class Context:
         if global_scope:
             self.global_symbol_table[identifier] = t
         else:
-            self.local_symbol_tables[-1][identifier] = t
+            self.local_symbol_tables[-1].lookup(identifier).type = t
 
-    def declare_variable(self, identifier, t=None):
-        if not self.local_symbol_tables or identifier in self.local_symbol_tables[-1]:
-            raise Exception(f"Variable '{identifier}' already declared in this scope or no scope available.")
+    def declare_variable(self, identifier, t=None, value=None):
+
 
         # Ensure variable is not declared in any parent context to prevent shadowing in the same block
         if self.parent:
-            if self.parent.is_declared_in_current_scope(identifier):
+            if self.parent.is_declared(identifier):
                 raise Exception(f"Variable '{identifier}' already declared in an outer scope")
 
         # Declare the variable in the current local scope
-        self.local_symbol_tables[-1][identifier] = t
+        self.local_symbol_tables[-1].declare(identifier, t, value)
 
     def is_declared(self, identifier):
-        # Check if variable is declared in any accessible scope
-        try:
-            self.get_type(identifier)
+        for symbol_table in reversed(self.local_symbol_tables):
+            if symbol_table.is_declared(identifier):
+                return True
+        if self.global_symbol_table.is_declared(identifier):
             return True
-        except VariableNotDeclaredError:
-            return False
+        return False
 
     def assign(self, identifier, value):
-        context = self
-        while context is not None:
-            if context.local_symbol_tables and identifier in context.local_symbol_tables[-1]:
-                context.local_symbol_tables[-1][identifier] = value
+        for symbol_table in reversed(self.local_symbol_tables):
+            if symbol_table.is_declared(identifier):
+                symbol_table.update(identifier, value)
                 return
-            context = context.parent
-
-        # Then, try to assign in the global scope
-        if identifier in self.global_symbol_table:
-            self.global_symbol_table[identifier] = value
+        if self.global_symbol_table.is_declared(identifier):
+            self.global_symbol_table.update(identifier, value)
         else:
             raise VariableNotDeclaredError(f"Variable '{identifier}' is not declared in the current scope.")
 
     def lookup(self, identifier):
-        # Lookup identifier first in local scopes, then global
         for symbol_table in reversed(self.local_symbol_tables):
-            if identifier in symbol_table:
-                return symbol_table[identifier]
-        if identifier in self.global_symbol_table:
-            return self.global_symbol_table[identifier]
+            if symbol_table.is_declared(identifier):
+                return symbol_table.lookup(identifier).value
+        if self.global_symbol_table.is_declared(identifier):
+            return self.global_symbol_table.lookup(identifier).value
         if self.parent:
             return self.parent.lookup(identifier)
         raise VariableNotDeclaredError(f"Variable '{identifier}' is not declared in the current scope.")
@@ -1235,10 +1331,15 @@ class Context:
     def enter_block(self, block_uuid):
         self.blocks_stack.append(self.current_block_uuid)
         self.current_block_uuid = block_uuid
+        self.local_symbol_tables.append(SymbolTable())  # New scope for the block
 
     def exit_block(self):
-        self.current_block_uuid = self.blocks_stack.pop()
-        self._clean_up_variables()
+        if self.local_symbol_tables:
+            self.local_symbol_tables.pop()
+        if self.blocks_stack:
+            self.current_block_uuid = self.blocks_stack.pop()
+        else:
+            self.current_block_uuid = None
 
     def get_current_block_uuid(self):
         return self.current_block_uuid
@@ -1250,13 +1351,13 @@ class Context:
 
     # Scope Management
     def enter_scope(self):
-        self.local_symbol_tables.append({})
+        self.local_symbol_tables.append(SymbolTable())
 
     def exit_scope(self):
         self.local_symbol_tables.pop()
 
     # Function Call Management
-    def enter_function_call(self, function_name, params=None):
+    def enter_function_call(self, function_name):
         if function_name in self.recursion_depth:
             self.recursion_depth[function_name] += 1
             if self.recursion_depth[function_name] > self.MAX_RECURSION_DEPTH:
@@ -1265,14 +1366,12 @@ class Context:
             self.recursion_depth[function_name] = 1
 
         new_context = Context(parent=self)
-        if params:
-            for param_name, param_value in params.items():
-                new_context.declare_variable(param_name, param_value)
         new_context.enter_scope()
         new_context.function_calls.append(function_name)
         new_context.call_stack.append(function_name)
         self.enter_block(str(uuid.uuid4()))  # Assign a new block UUID for the function scope
         return new_context
+
 
     def exit_function_call(self, function_name):
         if function_name in self.call_stack:
@@ -1284,20 +1383,39 @@ class Context:
         self.exit_scope()
         self.exit_block()
 
+    def declare_function(self, name, function_callable, global_scope=False):
+        """
+        Declare a function in the appropriate symbol table.
+        :param name: The name of the function.
+        :param function_callable: The callable function object.
+        :param global_scope: A flag indicating whether the function should be declared in the global scope
+        """
+        if global_scope:
+            self.global_symbol_table.declare(name, t='function', value=function_callable)
+        else:
+            self.local_symbol_tables[-1].declare(name, t='function', value=function_callable)
+
+
     def store_function(self, name, function, function_context):
-        self.global_symbol_table[name] = {
-            'function': function,
-            'context': function_context
-        }
+        """Stores a function and its context in the global symbol table."""
+        self.global_symbol_table.declare(name, t='function', value={'function': function, 'context': function_context})
 
     def lookup_function(self, name):
-        if name in self.global_symbol_table and 'function' in self.global_symbol_table[name]:
-            return self.global_symbol_table[name]['function']
+        for symbol_table in reversed(self.local_symbol_tables):
+            if symbol_table.is_declared(name):
+                entry = symbol_table.lookup(name)
+                if entry.type == 'function':
+                    return entry.value
+        if self.global_symbol_table.is_declared(name):
+            entry = self.global_symbol_table.lookup(name)
+            if entry.type == 'function':
+                return entry.value
         raise FunctionNotFoundError(f"Function '{name}' is not defined in the current scope.")
 
+
     def handle_return(self, value):
-        # Store the return value in the context if needed
         self.return_value = value
+
 
     # Loop Management
     def enter_loop(self, loop_uuid):
@@ -1414,7 +1532,36 @@ class Callable:
         return self.__str__()
 
 
+class CallableFunction(Callable):
+    def __init__(self, name, parameters, body, return_type=None):
+        super().__init__(return_type=return_type, arg_types=[])
+        self.name = name
+        self.parameters = parameters
+        self.body = body
 
+    def invoke(self, *args, context):
+        local_context = context.enter_function_call(self.name)
+
+        # Declare parameters without types initially
+        for param in self.parameters:
+            local_context.declare_variable(param.name)
+
+        # Bind parameters to arguments and infer/update types
+        for param, arg in zip(self.parameters, args):
+            param_type = param.get_type(local_context) if param.get_type(local_context) else type(arg)
+            local_context.assign(param.name, arg)
+            local_context.set_type(param.name, param_type)
+
+        # Execute the function body
+        result = None
+        try:
+            for node in self.body:
+                node.evaluate(local_context)
+        except ReturnException as re:
+            result = re.value
+
+        context.exit_function_call(self.name)
+        return result
 
 #Exception Handling
 
@@ -1434,9 +1581,12 @@ class TryCatchNode(ParserNode):
 
     def evaluate(self, context):
         context.enter_block(self.block_uuid)
+        return_value = None
         try:
             for node in self.try_block:
-                node.evaluate(context)
+                return_value = node.evaluate(context)
+                if isinstance(node, ReturnNode):
+                    break
         except Exception as e:
             if self.catch_block:
                 exception_type, handler_block = self.catch_block
@@ -1444,7 +1594,9 @@ class TryCatchNode(ParserNode):
                     catch_context = context.clone()
                     context.enter_block(str(uuid.uuid4()))  # New block UUID for the catch block
                     for node in handler_block:
-                        node.evaluate(catch_context)
+                        return_value = node.evaluate(catch_context)
+                        if isinstance(node, ReturnNode):
+                            break
                     context.exit_block()
                 else:
                     self.handle_error(e, context)
@@ -1455,9 +1607,12 @@ class TryCatchNode(ParserNode):
                 finally_context = context.clone()
                 context.enter_block(str(uuid.uuid4()))  # New block UUID for the finally block
                 for node in self.finally_block:
-                    node.evaluate(finally_context)
+                    return_value = node.evaluate(finally_context)
+                    if isinstance(node, ReturnNode):
+                        break
                 context.exit_block()
         context.exit_block()
+        return return_value
 
     def get_type(self, context):
         try:
@@ -1479,7 +1634,6 @@ class TryCatchNode(ParserNode):
             self.handle_error(e, context)
         finally:
             context.exit_block()
-
 
 
 class ParserError(Exception):
@@ -1504,7 +1658,9 @@ class FunctionNotFoundError(ParserError):
     def __init__(self, message):
         super().__init__(message)
 
-
+class ReturnException(Exception):
+    def __init__(self, value):
+        self.value = value
 # Create and testt
 
 def test_ast():

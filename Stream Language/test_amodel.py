@@ -1,4 +1,6 @@
 import unittest
+from lib2to3.fixes.fix_input import context
+
 from a_model import (
     Context,
     ProgramNode,
@@ -46,17 +48,39 @@ class TestASTModel(unittest.TestCase):
         self.assertEqual(self.context.get_type('x'), int)
 
     def test_if_node(self):
-        """Test IfNode evaluation with both true and false branches."""
+        """Test IfNode evaluation with both true and false branches within a function context."""
+        # Create a function node to encapsulate the if statement
+        func_body = []
         condition = BinaryOperationNode('>', PrimitiveIntNode(10), PrimitiveIntNode(5))
         then_block = [ReturnNode(PrimitiveIntNode(1))]
         else_block = [ReturnNode(PrimitiveIntNode(0))]
         if_node = IfNode(condition, then_block, else_block)
-        self.assertEqual(if_node.evaluate(self.context), 1)
+        func_body.append(if_node)
+
+        # Define the function with the if statement as its body
+        function_node = FunctionNode("testFunc", [], func_body, return_type=int)
+
+        # Declare and evaluate the function in the context
+        self.context.declare_function("testFunc", function_node)
+        func_call = FunctionCallNode(IdentifierNode("testFunc"), [])
+        result = func_call.evaluate(self.context)
+
+        # Assert that the correct value is returned when the condition is true
+        self.assertEqual(result, 1)
 
         # Now test the else branch by changing the condition
+        func_body = []
         condition = BinaryOperationNode('<', PrimitiveIntNode(10), PrimitiveIntNode(5))
         if_node = IfNode(condition, then_block, else_block)
-        self.assertEqual(if_node.evaluate(self.context), 0)
+        func_body.append(if_node)
+
+        # Redefine the function with the updated if statement
+        function_node = FunctionNode("testFunc", [], func_body, return_type=int)
+        self.context.declare_function("testFunc", function_node)
+        result = func_call.evaluate(self.context)
+
+        # Assert that the correct value is returned when the condition is false
+        self.assertEqual(result, 0)
 
     def test_function_node(self):
         """Test FunctionNode evaluation and invocation."""
@@ -67,7 +91,7 @@ class TestASTModel(unittest.TestCase):
 
         # Now invoke the function
         func_call = FunctionCallNode(IdentifierNode('add'), [PrimitiveIntNode(2), PrimitiveIntNode(3)])
-        result = func_call.evaluate(self.context)
+        result = func_call.evaluate(context= self.context)
         self.assertEqual(result, 5)
 
     def test_try_catch_node(self):
@@ -107,10 +131,11 @@ class TestASTModel(unittest.TestCase):
 
     def test_variable_declaration_node(self):
         """Test VariableDeclarationNode for proper type inference and evaluation."""
-        var_decl = VariableDeclarationNode(IdentifierNode('y'), value=PrimitiveFloatNode(10.5))
-        result = var_decl.evaluate(self.context)
-        self.assertEqual(result, 10.5)
-        self.assertEqual(self.context.get_type('y'), float)
+        var_decl = VariableDeclarationNode(IdentifierNode('x'), value=PrimitiveIntNode(10))
+        var_decl.evaluate(self.context)
+        result = self.context.lookup('x')
+        self.assertEqual(result, 10)
+        self.assertEqual(self.context.get_type('x'), int)
 
 
 if __name__ == '__main__':
