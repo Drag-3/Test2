@@ -1,7 +1,9 @@
 import uuid
 
-from symbol_table import SymbolTable
-from exceptions import VariableNotDeclaredError, FunctionNotFoundError, SLRecursionError
+from StreamLanguage.ast.symbol_table import SymbolTable
+from StreamLanguage.ast.exceptions import VariableNotDeclaredError, FunctionNotFoundError, SLRecursionError, \
+    FunctionDeclarationError, VariableRedeclaredError
+from StreamLanguage.ast.block_types import BlockFlags, BlockType
 
 
 class Context:
@@ -9,14 +11,13 @@ class Context:
 
 
 
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, context_type=None):
         self.parent = parent
+        self.context_type = context_type or 'generic'  # Default to 'generic' if not specified
         self.global_symbol_table = SymbolTable() if parent is None else parent.global_symbol_table
         self.local_symbol_tables = [SymbolTable()]  # Stack of local symbol tables
-        self.function_calls = []
         self.blocks_stack = []  # Stack to manage block UUIDs
         self.recursion_depth = {}
-        self.current_block_uuid = None
         self.call_stack = []  # Stack to maintain function call trace
         self.loop_stack = []  # Stack to manage loop states
 
@@ -36,7 +37,7 @@ class Context:
             context = context.parent
 
         if identifier in self.global_symbol_table:
-            return self.global_symbol_table[identifier]
+            return self.global_symbol_table[identifier].type
 
         raise VariableNotDeclaredError(f"Variable '{identifier}' is not declared in the current scope.")
 
@@ -48,15 +49,13 @@ class Context:
             self.local_symbol_tables[-1].lookup(identifier).type = t
 
     def declare_variable(self, identifier, t=None, value=None):
+        current_symbol_table = self.local_symbol_tables[-1]
 
+        # Prevent redeclaration in the same scope
+        if current_symbol_table.is_declared(identifier):
+            raise VariableRedeclaredError(f"Variable '{identifier}' already declared in the current scope")
 
-        # Ensure variable is not declared in any parent context to prevent shadowing in the same block
-        if self.parent:
-            if self.parent.is_declared(identifier):
-                raise Exception(f"Variable '{identifier}' already declared in an outer scope")
-
-        # Declare the variable in the current local scope
-        self.local_symbol_tables[-1].declare(identifier, t, value)
+        current_symbol_table.declare(identifier, t, value)
 
     def is_declared(self, identifier):
         for symbol_table in reversed(self.local_symbol_tables):
@@ -77,88 +76,124 @@ class Context:
             raise VariableNotDeclaredError(f"Variable '{identifier}' is not declared in the current scope.")
 
     def lookup(self, identifier):
+        # Check local scopes from nearest to farthest
         for symbol_table in reversed(self.local_symbol_tables):
             if symbol_table.is_declared(identifier):
                 return symbol_table.lookup(identifier).value
+
+        # Fallback to global scope
         if self.global_symbol_table.is_declared(identifier):
             return self.global_symbol_table.lookup(identifier).value
-        if self.parent:
-            return self.parent.lookup(identifier)
+
+        # If not found anywhere, handle the error
         raise VariableNotDeclaredError(f"Variable '{identifier}' is not declared in the current scope.")
 
-
     # Block Management
-    def enter_block(self, block_uuid):
-        self.blocks_stack.append(self.current_block_uuid)
-        self.current_block_uuid = block_uuid
-        self.local_symbol_tables.append(SymbolTable())  # New scope for the block
+    def get_current_block_uuid(self):
+        if self.blocks_stack:
+            return self.blocks_stack[-1][0]  # Return the UUID of the topmost block
+        return None  # Return None if there are no blocks
+
+    def get_current_block_type(self):
+        if self.blocks_stack:
+            block_type_flags = self.blocks_stack[-1][1]
+            for block_type in BlockType:
+                if block_type.value == block_type_flags:
+                    return block_type
+        return BlockType.PROGRAM
+
+    def get_current_block_flags(self):
+        return self.get_current_block_type().value
+
+    def enter_block(self, block_uuid, block_type=BlockType.DEFAULT):
+        # Push the new block information onto the stack
+        self.blocks_stack.append((block_uuid, block_type))
+        self.enter_scope()  # Create a new symbol table scope for this block
+
+    def can_define_function(self):
+        current_block_type = self.get_current_block_type()
+        return (current_block_type.value & BlockFlags.ALLOW_FUNCTIONS) != 0
 
     def exit_block(self):
-        if self.local_symbol_tables:
-            self.local_symbol_tables.pop()
+        # First, handle any variable cleanups
+        self._clean_up_variables()
+        # Then, exit the scope associated with this block
+        self.exit_scope()
+        # Finally, remove the block from the stack
         if self.blocks_stack:
-            self.current_block_uuid = self.blocks_stack.pop()
-        else:
-            self.current_block_uuid = None
-
-    def get_current_block_uuid(self):
-        return self.current_block_uuid
+            self.blocks_stack.pop()
 
     def _clean_up_variables(self):
         # Clean up variables declared in the current block
         if self.local_symbol_tables:
-            self.local_symbol_tables.pop()
+            current_symbol_table = self.local_symbol_tables[-1]
+            current_symbol_table.cleanup()
 
     # Scope Management
     def enter_scope(self):
         self.local_symbol_tables.append(SymbolTable())
 
     def exit_scope(self):
-        self.local_symbol_tables.pop()
+        if self.local_symbol_tables:
+            self.local_symbol_tables.pop()
 
     # Function Call Management
-    def enter_function_call(self, function_name):
-        if function_name in self.recursion_depth:
-            self.recursion_depth[function_name] += 1
-            if self.recursion_depth[function_name] > self.MAX_RECURSION_DEPTH:
-                raise SLRecursionError(f"Exceeded maximum recursion depth in function '{function_name}'")
+    def enter_function_call(self, function_node, arguments):
+        # Check recursion limits
+        if function_node.name in self.recursion_depth:
+            self.recursion_depth[function_node.name] += 1
+            if self.recursion_depth[function_node.name] > self.MAX_RECURSION_DEPTH:
+                raise SLRecursionError(f"Exceeded maximum recursion depth in function '{function_node.name}'")
         else:
-            self.recursion_depth[function_name] = 1
+            self.recursion_depth[function_node.name] = 1
 
-        new_context = Context(parent=self)
-        new_context.enter_scope()
-        new_context.function_calls.append(function_name)
-        new_context.call_stack.append(function_name)
-        self.enter_block(str(uuid.uuid4()))  # Assign a new block UUID for the function scope
+        block_uuid = str(uuid.uuid4())
+        self.enter_block(block_uuid, BlockType.FUNCTION)  # Track the function call block
+
+        # Create a new context for the function call
+        new_context = Context(parent=self, context_type='function')
+        new_context.call_stack.append(function_node.name)  # Add the function name to the call stack
+
+        # Assign arguments to the function parameters
+        for param, arg in zip(function_node.parameters, arguments):
+            new_context.declare_variable(param.name, value=arg)
+
+
         return new_context
 
+    def exit_function_call(self, child_context):
+        if not child_context:  # No child context to exit
+            return
 
-    def exit_function_call(self, function_name):
-        if function_name in self.call_stack:
+        # Cleanup any block-level resources
+        child_context.exit_block()
+
+        # Pop the function call and context from the parent's call stack
+        if self.call_stack:
             self.call_stack.pop()
-        if function_name in self.recursion_depth:
+
+        # Decrement recursion depth for this function
+        function_name = child_context.call_stack[-1]  # Get the function name from child context
+        if self.recursion_depth[function_name] > 0:
             self.recursion_depth[function_name] -= 1
-            if self.recursion_depth[function_name] == 0:
-                del self.recursion_depth[function_name]
-        self.exit_scope()
-        self.exit_block()
+        if self.recursion_depth[function_name] == 0:
+            del self.recursion_depth[function_name]  # Cleanup recursion tracking
 
-    def declare_function(self, name, function_callable, global_scope=False):
-        """
-        Declare a function in the appropriate symbol table.
-        :param name: The name of the function.
-        :param function_callable: The callable function object.
-        :param global_scope: A flag indicating whether the function should be declared in the global scope
-        """
-        if global_scope:
-            self.global_symbol_table.declare(name, t='function', value=function_callable)
-        else:
-            self.local_symbol_tables[-1].declare(name, t='function', value=function_callable)
+        # Additional cleanup if necessary
+        child_context.cleanup()
 
+    def declare_function(self, name, function_callable, parameters, return_type, global_scope=False):
+        if not self.can_define_function():
+            raise FunctionDeclarationError(f"Cannot declare function '{name}' in this block type.")
 
-    def store_function(self, name, function, function_context):
-        """Stores a function and its context in the global symbol table."""
-        self.global_symbol_table.declare(name, t='function', value={'function': function, 'context': function_context})
+        function_info = {
+            'callable': function_callable,
+            'parameters': parameters,
+            'return_type': return_type
+        }
+
+        target_symbol_table = self.global_symbol_table if global_scope else self.local_symbol_tables[-1]
+        target_symbol_table.declare_function(name, parameters, function_info)
 
     def lookup_function(self, name):
         for symbol_table in reversed(self.local_symbol_tables):
@@ -172,27 +207,68 @@ class Context:
                 return entry.value
         raise FunctionNotFoundError(f"Function '{name}' is not defined in the current scope.")
 
+    def handle_return(self, return_value):
+        # Process the return value here, maybe modify it or log it
+        print(f"Function returned: {return_value}")  #Logging for debugging
 
-    def handle_return(self, value):
-        self.return_value = value
+        return return_value
 
-
+    def is_recursive_call(self, caller, callee):
+        return callee in self.call_stack
     # Loop Management
-    def enter_loop(self, loop_uuid):
+    def enter_loop(self):
+        loop_uuid = str(uuid.uuid4())
         self.loop_stack.append(loop_uuid)
+        self.enter_block(loop_uuid, BlockType.LOOP)  # Enter a new block for the loop
 
     def exit_loop(self):
-        self.loop_stack.pop()
+        self.exit_block()  # Exit the loop block
+        if self.loop_stack:
+            self.loop_stack.pop()
 
     def get_current_loop(self):
         return self.loop_stack[-1] if self.loop_stack else None
 
+    def enter_if_block(self):
+        block_uuid = str(uuid.uuid4())
+        self.enter_block(block_uuid, BlockType.IF)
+
+    def exit_if_block(self):
+        self.exit_block()
+
+    def enter_else_block(self):
+        block_uuid = str(uuid.uuid4())
+        self.enter_block(block_uuid, BlockType.ELSE)
+
+    def exit_else_block(self):
+        self.exit_block()
+
+    def enter_try(self):
+        block_uuid = str(uuid.uuid4())
+        self.enter_block(block_uuid, BlockType.TRY)
+
+    def exit_try(self):
+        self.exit_block()
+
+    def enter_catch(self, exception):
+        block_uuid = str(uuid.uuid4())
+        self.enter_block(block_uuid, BlockType.CATCH)
+
+    def exit_catch(self):
+        self.exit_block()
+
+    def enter_finally(self):
+        block_uuid = str(uuid.uuid4())
+        self.enter_block(block_uuid, BlockType.FINALLY)
+
+    def exit_finally(self):
+        self.exit_block()
+
     # Debugging and Tracing
     def dump_state(self):
-        print("Current Block UUID:", self.current_block_uuid)
+        print("Current Block UUID:", self.get_current_block_uuid())
         print("Current Symbol Table:", self.local_symbol_tables[-1])
         print("Global Symbol Table:", self.global_symbol_table)
-        print("Function Calls:", self.function_calls)
         print("Call Stack:", self.call_stack)
         print("Block Stack:", self.blocks_stack)
         print("Loop Stack:", self.loop_stack)
@@ -203,19 +279,38 @@ class Context:
         new_context = Context(parent=self.parent)
         new_context.global_symbol_table = self.global_symbol_table.copy()
         new_context.local_symbol_tables = [table.copy() for table in self.local_symbol_tables]
-        new_context.function_calls = self.function_calls.copy()
         new_context.blocks_stack = self.blocks_stack.copy()
         new_context.recursion_depth = self.recursion_depth.copy()
-        new_context.current_block_uuid = self.current_block_uuid
         new_context.call_stack = self.call_stack.copy()
         new_context.loop_stack = self.loop_stack.copy()
         return new_context
 
+    def cleanup(self):
+        # Cleanup all local symbol tables
+        for symbol_table in self.local_symbol_tables:
+            symbol_table.cleanup()
+        self.local_symbol_tables.clear()
+
+        # Cleanup global symbol table only if it's not shared
+        if self.parent is None:
+            self.global_symbol_table.cleanup()
+
+        # Clear all other attributes This may or may not result in a usable context
+        self.blocks_stack.clear()
+        self.recursion_depth.clear()
+        self.call_stack.clear()
+        self.loop_stack.clear()
+
     def reset(self):
-        self.local_symbol_tables = [{}]
-        self.function_calls = []
+        # Reset local symbol tables
+        self.local_symbol_tables = [SymbolTable()]
+
+        # Optionally reset the global symbol table if it's not shared
+        if self.parent is None:
+            self.global_symbol_table.reset()
+
+        # Reset all lists and dictionaries, but keep the structure
         self.blocks_stack = []
         self.recursion_depth = {}
-        self.current_block_uuid = None
         self.call_stack = []
         self.loop_stack = []

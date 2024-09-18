@@ -1,70 +1,76 @@
-from .exceptions import VariableNotDeclaredError, TypeError
+from StreamLanguage.ast.exceptions import VariableNotDeclaredError, SLTypeError, VariableRedeclaredError
+
 
 class SymbolTableEntry:
-    def __init__(self, identifier, t=None, value=None):
+    def __init__(self, identifier, t=None, value=None, is_constant=False, scope_level=None):
         self.identifier = identifier  # The name of the variable or symbol
         self.type = t  # The type of the symbol (optional)
         self.value = value  # The value associated with the symbol (optional)
-        self.scope_level = None
-        self.is_constant = False
+        self.scope_level = scope_level  # The scope level at which the symbol was declared
+        self.is_constant = is_constant
+        self.overloads = []  # List to store overloads or additional entries if necessary
+
+    def add_overload(self, entry):
+        self.overloads.append(entry)
 
     def __repr__(self):
         return f"SymbolTableEntry(identifier={self.identifier}, type={self.type}, value={self.value}, scope_level={self.scope_level}, is_constant={self.is_constant})"
 
-class SymbolTable:
-    def __init__(self):
-        self.table = {}  # Dictionary to store symbols
+    def cleanup(self):
+        # If 'value' is a resource that needs to be explicitly closed
+        if hasattr(self.value, 'close'):
+            try:
+                self.value.close()
+            except Exception as e:
+                print(f"Failed to close resource for {self.identifier}: {str(e)}")
 
-    def declare(self, identifier, t=None, value=None, is_constant=False):
-        if identifier in self.table:
-            raise VariableNotDeclaredError(f"Variable '{identifier}' already declared in this scope")
-        entry = SymbolTableEntry(identifier, t, value)
-        entry.is_constant = is_constant
-        self.table[identifier] = entry
+        # Clear the references to help with garbage collection
+        self.identifier = None
+        self.type = None
+        self.value = None
+        self.scope_level = None
+        self.is_constant = None
+
+class SymbolTable:
+    def __init__(self, parent=None):
+        self.parent = parent
+        self.entries = {}
+
+    def declare(self, identifier, t, value=None, is_constant=False):
+        if identifier in self.entries:
+            raise VariableRedeclaredError(f"Variable '{identifier}' already declared")
+        self.entries[identifier] = SymbolTableEntry(identifier, t, value, is_constant)
 
     def update(self, identifier, value):
-        if identifier not in self.table:
-            raise VariableNotDeclaredError(f"Variable '{identifier}' is not declared")
-
-        entry = self.table[identifier]
-
+        if identifier not in self.entries:
+            raise VariableNotDeclaredError(f"Variable '{identifier}' not declared")
+        entry = self.entries[identifier]
         if entry.is_constant:
-            raise Exception(f"Cannot reassign value to constant '{identifier}'")
-
-        # Determine the type of the new value
-        new_type = type(value)
-
-        if entry.type is None:
-            # If the type hasn't been set, set it now
-            entry.type = new_type
-        elif entry.type != new_type:
-            raise TypeError(
-                f"Type mismatch for variable '{identifier}': expected {entry.type.__name__}, but got {new_type.__name__}")
-
-        # Update the value
+            raise Exception("Cannot reassign value to a constant variable")
         entry.value = value
 
     def lookup(self, identifier):
-        if identifier not in self.table:
-            raise VariableNotDeclaredError(f"Variable '{identifier}' is not declared")
-        return self.table[identifier]
+        return self.entries.get(identifier, None)
+
+    def declare_function(self, identifier, type, parameters, value):
+        if identifier in self.entries:
+            self.entries[identifier].add_overload(type, value)
+        else:
+            self.entries[identifier] = SymbolTableEntry(identifier, type, value)
 
     def is_declared(self, identifier):
-        return identifier in self.table
+        return identifier in self.entries
 
-    def copy(self):
-        new_table = SymbolTable()
-        new_table.table = self.table.copy()
-        return new_table
-
-    def __getitem__(self, identifier):
-        return self.lookup(identifier).value
-
-    def __setitem__(self, identifier, value):
-        self.update(identifier, value)
-
-    def __contains__(self, identifier):
-        return identifier in self.table
+    def cleanup(self):
+        for entry in self.entries.values():
+            entry.cleanup()
+        self.entries.clear()
 
     def __repr__(self):
-        return f"SymbolTable({self.table})"
+        return f"SymbolTable({self.entries})"
+
+    def __getitem__(self, item):
+        return self.entries[item]
+
+    def __setitem__(self, key, value):
+        self.entries[key] = value

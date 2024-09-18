@@ -1,7 +1,8 @@
 """
 Exceptions and Signals for the AST module.
 """
-from StreamLanguage.exceptions import SLException
+from StreamLanguage.exceptions import SLException, SLBaseException
+
 
 class ParserError(SLException):
     def __init__(self, message, node=None):
@@ -20,6 +21,13 @@ class VariableNotDeclaredError(ParserError):
     def __init__(self, message):
         super().__init__(message)
 
+class VariableRedeclaredError(ParserError):
+    def __init__(self, message):
+        super().__init__(message)
+
+class FunctionDeclarationError(ParserError):
+    def __init__(self, message):
+        super().__init__(message)
 
 class FunctionNotFoundError(ParserError):
     def __init__(self, message):
@@ -50,7 +58,7 @@ class InvalidOperationError(ParserError):
         super().__init__(message)
 
 
-class ReturnException(SLException):
+class ReturnException(SLBaseException):
     def __init__(self, value):
         self.value = value
 

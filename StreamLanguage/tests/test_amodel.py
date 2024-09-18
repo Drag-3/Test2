@@ -1,29 +1,12 @@
 import unittest
-from lib2to3.fixes.fix_input import context
 
-from a_model import (
-    Context,
-    ProgramNode,
-    IfNode,
-    WhileNode,
-    ForNode,
-    AssignmentNode,
-    BinaryOperationNode,
-    UnaryOperationNode,
-    FunctionCallNode,
-    ReturnNode,
-    IdentifierNode,
-    PrimitiveIntNode,
-    PrimitiveFloatNode,
-    PrimitiveStringNode,
-    VariableDeclarationNode,
-    ArrayNode,
-    FunctionNode,
-    LambdaNode,
-    ApplyNode,
-    TryCatchNode,
-    ParserError,
-)
+from StreamLanguage.ast.context import Context
+from StreamLanguage.ast.nodes.error_handling import TryCatchNode
+from StreamLanguage.ast.nodes.expressions import IdentifierNode, AssignmentNode, BinaryOperationNode, UnaryOperationNode
+from StreamLanguage.ast.nodes.flow_control import IfNode
+from StreamLanguage.ast.nodes.functions import ReturnNode, FunctionNode, FunctionCallNode, LambdaNode, ApplyNode
+from StreamLanguage.ast.nodes.structure import VariableDeclarationNode
+from StreamLanguage.ast.nodes.types import PrimitiveIntNode, PrimitiveStringNode, ArrayNode
 
 
 class TestASTModel(unittest.TestCase):
@@ -61,7 +44,7 @@ class TestASTModel(unittest.TestCase):
         function_node = FunctionNode("testFunc", [], func_body, return_type=int)
 
         # Declare and evaluate the function in the context
-        self.context.declare_function("testFunc", function_node)
+        function_node.evaluate(self.context)
         func_call = FunctionCallNode(IdentifierNode("testFunc"), [])
         result = func_call.evaluate(self.context)
 
@@ -76,7 +59,7 @@ class TestASTModel(unittest.TestCase):
 
         # Redefine the function with the updated if statement
         function_node = FunctionNode("testFunc", [], func_body, return_type=int)
-        self.context.declare_function("testFunc", function_node)
+        function_node.evaluate(self.context)
         result = func_call.evaluate(self.context)
 
         # Assert that the correct value is returned when the condition is false
@@ -138,5 +121,101 @@ class TestASTModel(unittest.TestCase):
         self.assertEqual(self.context.get_type('x'), int)
 
 
+    def test_addition(self):
+        """Test BinaryOperationNode for addition."""
+        addition = BinaryOperationNode('+', PrimitiveIntNode(5), PrimitiveIntNode(3))
+        result = addition.evaluate(self.context)
+        self.assertEqual(result, 8)
+
+    def test_subtraction(self):
+        """Test BinaryOperationNode for subtraction."""
+        subtraction = BinaryOperationNode('-', PrimitiveIntNode(5), PrimitiveIntNode(3))
+        result = subtraction.evaluate(self.context)
+        self.assertEqual(result, 2)
+
+    def test_multiplication(self):
+        """Test BinaryOperationNode for multiplication."""
+        multiplication = BinaryOperationNode('*', PrimitiveIntNode(5), PrimitiveIntNode(3))
+        result = multiplication.evaluate(self.context)
+        self.assertEqual(result, 15)
+
+    def test_division(self):
+
+        """Test BinaryOperationNode for division."""
+        division = BinaryOperationNode('/', PrimitiveIntNode(6), PrimitiveIntNode(3))
+        result = division.evaluate(self.context)
+        self.assertEqual(result, 2)
+
+    def test_greater_than(self):
+        """Test BinaryOperationNode for greater than comparison."""
+        greater_than = BinaryOperationNode('>', PrimitiveIntNode(5), PrimitiveIntNode(3))
+        result = greater_than.evaluate(self.context)
+        self.assertTrue(result)
+
+    def test_less_than(self):
+        """Test BinaryOperationNode for less than comparison."""
+        less_than = BinaryOperationNode('<', PrimitiveIntNode(5), PrimitiveIntNode(3))
+        result = less_than.evaluate(self.context)
+        self.assertFalse(result)
+
+    def test_equality(self):
+        """Test BinaryOperationNode for equality comparison."""
+        equality = BinaryOperationNode('==', PrimitiveIntNode(5), PrimitiveIntNode(3))
+        result = equality.evaluate(self.context)
+        self.assertFalse(result)
+
+    def test_inequality(self):
+        """Test BinaryOperationNode for inequality comparison."""
+        inequality = BinaryOperationNode('!=', PrimitiveIntNode(5), PrimitiveIntNode(3))
+        result = inequality.evaluate(self.context)
+        self.assertTrue(result)
+
+    def test_and(self):
+        """Test BinaryOperationNode for logical AND."""
+        and_op = BinaryOperationNode('&&', PrimitiveIntNode(5), PrimitiveIntNode(3))
+        result = and_op.evaluate(self.context)
+        self.assertTrue(result)
+
+    def test_or(self):
+        """Test BinaryOperationNode for logical OR."""
+        or_op = BinaryOperationNode('||', PrimitiveIntNode(5), PrimitiveIntNode(3))
+        result = or_op.evaluate(self.context)
+        self.assertTrue(result)
+
+    def test_not(self):
+        """Test BinaryOperationNode for logical NOT."""
+        not_op = UnaryOperationNode('!', PrimitiveIntNode(5))
+        result = not_op.evaluate(self.context)
+        self.assertFalse(result)
+
+    def test_negation(self):
+        """Test UnaryOperationNode for negation."""
+        negation = UnaryOperationNode('-', PrimitiveIntNode(5))
+        result = negation.evaluate(self.context)
+        self.assertEqual(result, -5)
+
+    def test_positive(self):
+        """Test UnaryOperationNode for positive."""
+        positive = UnaryOperationNode('+', PrimitiveIntNode(5))
+        result = positive.evaluate(self.context)
+        self.assertEqual(result, 5)
+
+    def test_function_overloading(self):
+        """Test function overloading with different parameter counts."""
+        params = [IdentifierNode('a'), IdentifierNode('b')]
+        body = [ReturnNode(BinaryOperationNode('+', IdentifierNode('a'), IdentifierNode('b')))]
+        function = FunctionNode('add', params, body)
+        function.evaluate(self.context)
+
+        # Now define a function with a single parameter
+        params = [IdentifierNode('a')]
+        body = [ReturnNode(IdentifierNode('a'))]
+        function = FunctionNode('add', params, body)
+        function.evaluate(self.context)
+
+        # Now invoke the function with a single argument
+        func_call = FunctionCallNode(IdentifierNode('add'), [PrimitiveIntNode(5)])
+        result = func_call.evaluate(self.context)
+        self.assertEqual(result, 5)
 if __name__ == '__main__':
     unittest.main()

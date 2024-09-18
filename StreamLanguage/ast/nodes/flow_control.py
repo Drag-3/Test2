@@ -1,7 +1,9 @@
 import uuid
 
-from .base import ParserNode
-from ..exceptions import ParserError
+from StreamLanguage.ast.nodes.base import ParserNode
+from StreamLanguage.ast.exceptions import ParserError
+from StreamLanguage.ast.block_types import BlockType
+from StreamLanguage.exceptions import SLException
 
 
 class IfNode(ParserNode):
@@ -12,6 +14,7 @@ class IfNode(ParserNode):
     - `else_block`: The block of code to execute if the condition is false (optional).
     """
 
+    BlockType = BlockType.IF
     def __init__(self, condition, then_block, else_block=None):
         super().__init__('if')
         self.condition = condition
@@ -31,17 +34,17 @@ class IfNode(ParserNode):
         try:
             return_val = None
             if self.condition.evaluate(context):
-                context.enter_block(self.then_block_uuid)
+                context.enter_block(self.then_block_uuid, BlockType.IF)
                 for node in self.then_block:
                     return_val = node.evaluate(context)
                 context.exit_block()
             elif self.else_block:
-                context.enter_block(self.else_block_uuid)
+                context.enter_block(self.else_block_uuid, BlockType.ELSE)
                 for node in self.else_block:
                     return_val = node.evaluate(context)
                 context.exit_block()
             return return_val
-        except Exception as e:
+        except SLException as e:
             self.handle_error(e, context)
 
     def get_type(self, context):
@@ -56,7 +59,7 @@ class IfNode(ParserNode):
             if else_type and then_type != else_type:
                 raise ParserError("Type mismatch between then and else branches", node=self)
             return then_type or else_type
-        except Exception as e:
+        except SLException as e:
             self.handle_error(e, context)
 
     def handle_error(self, error, context):
@@ -74,7 +77,7 @@ class WhileNode(ParserNode):
     - `condition`: The condition to evaluate for each loop iteration.
     - `body`: The block of code to execute as long as the condition is true.
     """
-
+    BlockType = BlockType.LOOP
     def __init__(self, condition, body):
         super().__init__('while')
         self.condition = condition
@@ -91,12 +94,12 @@ class WhileNode(ParserNode):
         This method repeatedly evaluates the body as long as the condition evaluates to True.
         """
         try:
-            context.enter_block(self.body_uuid)  # Enter the loop body block
+            context.enter_block(self.body_uuid, BlockType.LOOP)  # Enter the loop body block
             while self.condition.evaluate(context):
                 for node in self.body:
                     node.evaluate(context)
             context.exit_block()  # Exit the loop body block
-        except Exception as e:
+        except SLException as e:
             self.handle_error(e, context)
 
     def get_type(self, context):
@@ -110,7 +113,7 @@ class WhileNode(ParserNode):
             for node in self.body:
                 node.get_type(context)
             return None
-        except Exception as e:
+        except SLException as e:
             self.handle_error(e, context)
 
     def handle_error(self, error, context):
@@ -118,6 +121,8 @@ class WhileNode(ParserNode):
         raise ParserError(error_message, node=self)
 
 class ForNode(ParserNode):
+
+    BlockType = BlockType.LOOP
     def __init__(self, initializer, condition, increment, body):
         super().__init__('for')
         self.initializer = initializer  # Typically an AssignmentNode or VariableDeclarationNode
@@ -132,15 +137,13 @@ class ForNode(ParserNode):
     def evaluate(self, context):
         try:
             self.initializer.evaluate(context)
-            context.enter_loop(self.body_uuid)  # Enter the loop
+            context.enter_loop(self.body_uuid, BlockType.LOOP)  # Enter the loop
             while self.condition.evaluate(context):
-                context.enter_block(self.body_uuid)  # Enter the loop body block
                 for statement in self.body:
                     statement.evaluate(context)
-                context.exit_block()  # Exit the loop body block
                 self.increment.evaluate(context)
             context.exit_loop()  # Exit the loop
-        except Exception as e:
+        except SLException as e:
             self.handle_error(e, context)
 
     def get_type(self, context):
@@ -153,7 +156,7 @@ class ForNode(ParserNode):
             for node in self.body:
                 node.get_type(context)
             return None  # For loop itself does not return a value
-        except Exception as e:
+        except SLException as e:
             self.handle_error(e, context)
 
     def handle_error(self, error, context):

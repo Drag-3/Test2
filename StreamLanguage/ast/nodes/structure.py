@@ -1,5 +1,8 @@
-from .base import ParserNode
-from ..exceptions import ParserError
+from StreamLanguage.ast.nodes.base import ParserNode
+from StreamLanguage.ast.exceptions import ParserError, VariableRedeclaredError
+from StreamLanguage.ast.block_types import BlockType
+from StreamLanguage.exceptions import SLException
+
 
 class ProgramNode(ParserNode):
     def __init__(self, nodes):
@@ -11,16 +14,20 @@ class ProgramNode(ParserNode):
 
     def evaluate(self, context):
         try:
+            context.enter_block(self.block_uuid, BlockType.PROGRAM)
             for node in self.nodes:
                 node.evaluate(context)
-        except Exception as e:
+        except SLException as e:
             self.handle_error(e, context)
+        finally:
+            context.exit_block()  # Ensure block is exited in all cases
+
 
     def get_type(self, context):
         try:
             for node in self.nodes:
                 node.get_type(context)
-        except Exception as e:
+        except SLException as e:
             self.handle_error(e, context)
 
     def handle_error(self, error, context):
@@ -62,17 +69,20 @@ class VariableDeclarationNode(ParserNode):
         try:
             # Check if the variable is already declared in the current scope
             if context.is_declared(self.identifier.name):
-                raise ParserError(f"Variable '{self.identifier.name}' already declared", node=self)
+                raise VariableRedeclaredError(f"Variable '{self.identifier.name}' already declared")
 
             # If a value is provided, evaluate it and assign it to the variable
-            if self.value is not None:
+            if self.value:
                 value = self.value.evaluate(context)
+                value_type = type(value)
                 context.declare_variable(self.identifier.name, type(value))
                 context.assign(self.identifier.name, value)
             else:
                 # If no value is provided, just declare the variable with the optional type hint
-                context.declare_variable(self.identifier.name, self.type_hint or None)
-        except Exception as e:
+                value_type = self.type_hint or None
+                value = None
+                context.declare_variable(self.identifier.name, value_type, value)
+        except SLException as e:
             self.handle_error(e, context)
 
     def get_type(self, context):
@@ -80,20 +90,11 @@ class VariableDeclarationNode(ParserNode):
         Determine and return the type of the variable being declared.
         This might be the type hint if provided, or the type of the initial value.
         """
-        try:
-            context.enter_block(self.block_uuid)  # Enter the block for type checking
-
-            if self.type_hint:
-                result_type = self.type_hint
-            elif self.value:
-                result_type = self.value.get_type(context)
-            else:
-                result_type = None  # If no type hint or initial value, the type may be undetermined
-
-            context.exit_block()  # Exit the block after type checking
-            return result_type
-        except Exception as e:
-            self.handle_error(e, context)
+        if self.type_hint:
+            return self.type_hint
+        elif self.value:
+            return self.value.get_type(context)
+        return None
 
     def handle_error(self, error, context):
         error_message = f"Error in variable declaration '{self.identifier.name}' with block UUID {self.block_uuid}: {str(error)}"

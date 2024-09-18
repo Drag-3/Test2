@@ -1,8 +1,10 @@
-from.base import ParserNode
-from .flow_control import IfNode
-from ..exceptions import ParserError, FunctionNotFoundError, SLRecursionError, ReturnException
-from ..symbol_table import SymbolTableEntry
-from ..callables import CallableFunction
+from StreamLanguage.ast.nodes.base import ParserNode
+from StreamLanguage.ast.nodes.flow_control import IfNode
+from StreamLanguage.ast.exceptions import ParserError, FunctionNotFoundError, SLRecursionError, ReturnException, SLTypeError
+from StreamLanguage.exceptions import SLException
+from StreamLanguage.ast.symbol_table import SymbolTableEntry
+from StreamLanguage.ast.callables import CallableFunction
+from StreamLanguage.ast.block_types import BlockType
 import uuid
 
 
@@ -20,6 +22,7 @@ class FunctionNode(ParserNode):
         return_type (type, optional): The return type of the function if explicitly specified.
     """
 
+    BLOCKTYPE = BlockType.FUNCTION
     def __init__(self, name, parameters, body, return_type=None):
         super().__init__(name)  # Generate a unique UUID for this function node
         self.name = name
@@ -32,95 +35,63 @@ class FunctionNode(ParserNode):
         return self.parameters + self.body
 
     def evaluate(self, context):
-        """
-        Evaluate the function definition within the given context.
-        Store the function in the global symbol table.
-        """
-        try:
-            # Store the function as a Callable in the symbol table
-            callable_function = CallableFunction(self.name, self.parameters, self.body, self.return_type)
-            context.declare_function(self.name, callable_function, global_scope=False)
-        except Exception as e:
-            self.handle_error(e, context)
+        callable_function = CallableFunction(self.name, self.parameters, self.body, self.return_type)
+        context.declare_function(self.name, callable_function, self.parameters, self.return_type, global_scope=False)
 
-    def invoke(self, *args, context):
-        """
-        Invoke the function with the provided arguments within the given context.
-        """
-        try:
-            context.enter_function_call(self.name)  # Track function call
-            context.enter_block(self.block_uuid)
-
-            # Create a new scope for function parameters
-            context.enter_scope()
-            for param, arg in zip(self.parameters, args):
-                param_type = param.get_type(context)
-                context.symbol_table.store(param.name, SymbolTableEntry(value=arg.evaluate(context), entry_type=param_type))
-
-            return_value = None
-            try:
-                for node in self.body:
-                    node.evaluate(context)
-            except ReturnException as re:
-                return_value = re.value
-
-            context.exit_scope()
-            context.exit_block()
-            context.exit_function_call(self.name)  # Untrack function call
-            return return_value
-        except Exception as e:
-            context.exit_scope()
-            context.exit_block()
-            context.exit_function_call(self.name)  # Ensure proper cleanup on error
-            self.handle_error(e, context)
 
     def check_for_infinite_recursion(self, context):
-        """ Perform static analysis to detect potential infinite recursion """
-        if not self._has_termination_path(self.body, context):
+        """ Perform static analysis to detect potential infinite recursion. """
+        visited = set()  # To keep track of visited nodes and avoid re-checking them
+        if not self._has_termination_path(self.body, context, visited):
             raise SLRecursionError(f"Function '{self.name}' may cause infinite recursion")
 
-    def _has_termination_path(self, nodes, context):
-        """ Recursively checks if there's a viable termination path in the function """
+
+    def _has_termination_path(self, nodes, context, visited):
+        """ Recursively checks if there's a viable termination path in the function. """
         for node in nodes:
+            if node in visited:
+                continue  # Skip already checked nodes to prevent unnecessary reevaluation
+            visited.add(node)
+
             if isinstance(node, ReturnNode):
-                return True  # Found a return statement, which is a potential base case
+                return True
             elif isinstance(node, IfNode):
-                then_terminates = self._has_termination_path(node.then_block, context)
-                else_terminates = self._has_termination_path(node.else_block, context) if node.else_block else False
+                then_terminates = self._has_termination_path(node.then_block, context, visited)
+                else_terminates = self._has_termination_path(node.else_block, context, visited) if node.else_block else False
                 if then_terminates or else_terminates:
-                    return True  # If any branch terminates, it's okay
+                    return True
             elif isinstance(node, FunctionCallNode):
-                if node.function.name == self.name:
-                    continue  # Skip self-recursive calls here
+                # Check for self-recursion directly or indirectly via other functions
+                if node.function.name == self.name or context.is_recursive_call(node.function.name, self.name):
+                    continue
             elif hasattr(node, 'children'):
-                if self._has_termination_path(node.children(), context):
+                if self._has_termination_path(node.children(), context, visited):
                     return True
         return False
 
     def get_type(self, context):
-        try:
-            context.enter_block(self.block_uuid)  # Enter the block for type inference
+        if self.return_type:
+            return self.return_type
 
-            if self.return_type:
-                result_type = self.return_type  # Use the explicitly provided return type
-            else:
-                result_type = self.infer_return_type(context)
-
-            context.exit_block()  # Exit the block after type inference
-            return result_type
-        except Exception as e:
-            self.handle_error(e, context)
+        return self.infer_return_type(context)
 
     def infer_return_type(self, context):
         """
-        Infer the return type by analyzing the function's body.
+        Infer the return type by analyzing the return statements within the function body.
+        Assumes that all return paths return the same type or throws a type inconsistency error.
         """
-        return_types = [node.get_type(context) for node in self.body if isinstance(node, ReturnNode)]
-        if len(set(return_types)) == 1:
-            return return_types[0]
-        elif return_types:
-            raise TypeError(f"Function '{self.name}' has inconsistent return types")
-        return None
+        inferred_types = set()
+        for node in self.body:
+            if isinstance(node, ReturnNode):
+                inferred_types.add(node.get_type(context))
+
+        if len(inferred_types) == 1:
+            return next(iter(inferred_types))  # Return the single inferred type
+        elif not inferred_types:
+            return None  # No return statements imply a possible 'void' type or equivalent
+        else:
+            raise SLTypeError(f"Function '{self.name}' has inconsistent return types")
+
 
     def handle_error(self, error, context):
         error_message = f"Error in function '{self.name}' with block UUID {self.block_uuid}: {str(error)}"
@@ -150,11 +121,11 @@ class FunctionCallNode(ParserNode):
 
     def evaluate(self, context):
         try:
-            context.enter_block(self.block_uuid)  # Enter the block for this function call
+            context.enter_block(self.block_uuid, BlockType.FUNCTION)  # Enter the block for this function call
 
             # Lookup the function in the symbol table
-            func = context.lookup_function(self.function.name)
-
+            func_info = context.lookup_function(self.function.name)
+            func = func_info.get('callable')
             args_values = [arg.evaluate(context) for arg in self.arguments]
             result = func.invoke(*args_values, context=context)
 
@@ -162,63 +133,28 @@ class FunctionCallNode(ParserNode):
             return result
         except SLRecursionError as re:
             raise ParserError(f"Infinite recursion detected in function '{self.function.name}': {str(re)}", node=self)
-        except Exception as e:
+        except SLException as e:
             context.exit_block()
             self.handle_error(e, context)
 
     def get_type(self, context):
-        try:
-            context.enter_block(self.block_uuid)  # Enter the block for type checking
+        function_callable = context.lookup_function(self.function.name)
+        if function_callable is None:
+            raise FunctionNotFoundError(f"Function '{self.function.name}' not found")
 
-            # Lookup the function in the symbol table
-            func_entry = context.lookup(self.function.name)
-            if not func_entry or func_entry.entry_type != 'function':
-                raise FunctionNotFoundError(f"Function '{self.function.name}' is not defined")
+        # Match argument types with parameter types
+        expected_types = [param.get_type(context) for param in function_callable.parameters]
+        given_types = [arg.get_type(context) for arg in self.arguments]
 
-            func = func_entry.value
-            return_type = func.get_type(context)
+        if len(expected_types) != len(given_types):
+            raise SLTypeError(f"Function '{self.function.name}' called with incorrect number of arguments")
 
-            # Check the types of the arguments against the function's parameter types
-            if len(self.arguments) != len(func.parameters):
-                raise ParserError(f"Function '{self.function.name}' expects {len(func.parameters)} arguments, "
-                                f"but {len(self.arguments)} were provided", node=self)
+        for expected, given in zip(expected_types, given_types):
+            if expected != given:
+                raise SLTypeError(
+                    f"Type mismatch in function call '{self.function.name}': expected {expected}, got {given}")
 
-            for arg_node, param_node in zip(self.arguments, func.parameters):
-                arg_type = arg_node.get_type(context)
-                param_type = param_node.get_type(context)
-
-                # If the parameter type is not explicitly stated, infer it
-                if param_type is None:
-                    param_node.type_hint = arg_type
-                elif arg_type != param_type:
-                    raise ParserError(
-                        f"Argument of type {arg_type.__name__} does not match expected type {param_type.__name__} "
-                        f"for parameter '{param_node.name}' in function '{self.function.name}'", node=self)
-
-            context.exit_block()  # Exit the block after type checking
-            return return_type
-        except Exception as e:
-            context.exit_block()
-            self.handle_error(e, context)
-
-    def infer_return_type(self, func, context):
-        """
-        Infer the return type of the function by analyzing the function's body.
-        """
-        try:
-            # Analyze the function's body to infer the return type
-            return_types = []
-            for node in func.body:
-                if isinstance(node, ReturnNode):
-                    return_types.append(node.get_type(context))
-
-            # If all return types are consistent, return the common type
-            if len(set(return_types)) == 1:
-                return return_types[0]
-            else:
-                raise TypeError(f"Function '{self.function.name}' has inconsistent return types", node=self)
-        except Exception as e:
-            self.handle_error(e, context)
+        return function_callable.get_type(context)  # This should invoke FunctionNode.get_type
 
     def handle_error(self, error, context):
         error_message = f"Error in function call block UUID {self.block_uuid}: {str(error)}"
@@ -264,37 +200,25 @@ class ReturnNode(ParserNode):
                 return None
         except ReturnException as re:
             raise re  # Propagate the return signal to the caller
-        except Exception as e:
+        except SLException as e:
             self.handle_error(e, context)
 
     def get_type(self, context):
         """
         Determine and return the type of the return value.
-        This is essential for type checking, especially in functions with a specified return type.
+        If the function is supposed to return a specific type, this method ensures that
+        the type of the value node matches the expected return type.
         """
-        try:
-            context.enter_block(self.block_uuid)  # Enter the block for type checking
+        if self.value is None:
+            return None
 
-            if self.value is not None:
-                return_type = self.value.get_type(context)
+        return_type = self.value.get_type(context)
 
-                # If the function has a return type defined, ensure compatibility
-                if context.current_function:
-                    expected_return_type = context.current_function.return_type
-                    if expected_return_type is None:
-                        # If no return type is specified, infer it from the current return statement
-                        context.current_function.return_type = return_type
-                    elif expected_return_type != return_type:
-                        raise TypeError(
-                            f"Return type mismatch: Expected {expected_return_type.__name__}, got {return_type.__name__}")
+        if context.current_function and context.current_function.return_type:
+            if return_type != context.current_function.return_type:
+                raise SLTypeError(f"Type mismatch: Function expected to return {context.current_function.return_type}, but got {return_type}")
 
-                context.exit_block()  # Exit the block after type checking
-                return return_type
-            else:
-                context.exit_block()  # Exit the block when there's no return value to type check
-                return None
-        except Exception as e:
-            self.handle_error(e, context)
+        return return_type
 
     def handle_error(self, error, context):
         error_message = f"Error in return statement block UUID {self.block_uuid}: {str(error)}"
@@ -303,104 +227,50 @@ class ReturnNode(ParserNode):
 
 class LambdaNode(ParserNode):
     def __init__(self, parameters, body):
-        super().__init__('lambda', block_uuid=str(uuid.uuid4()))
-        self.parameters = parameters  # List of IdentifierNodes for parameters
-        self.body = body              # Body of the lambda, typically a single return expression
-
-    def children(self):
-        return self.parameters + [self.body]
+        super().__init__('lambda')
+        self.parameters = parameters
+        self.body = body
 
     def evaluate(self, context):
-        try:
-            return lambda *args: self.invoke(args, context)
-        except Exception as e:
-            self.handle_error(e, context)
-
-    def invoke(self, *args, context):
-        try:
-            context.enter_scope()
-            context.enter_block(self.block_uuid)
-
-            # Bind parameters to arguments in a new scope
-            for param, arg in zip(self.parameters, args):
-                # If the parameter type is not yet set, infer it from the argument
-                if not context.is_declared(param.name):
-                    inferred_type = type(arg)
-                    context.declare_variable(param.name, t=inferred_type, value=arg)
-                else:
-                    context.assign(param.name, arg)
-
-            result = self.body.evaluate(context)
-
-            context.exit_block()
-            context.exit_scope()
-            return result
-        except Exception as e:
-            context.exit_block()
-            context.exit_scope()
-            self.handle_error(e, context)
+        # Returns a callable that captures the current context for later execution
+        def lambda_function(*args):
+            lambda_context = context.enter_function_call(self, args)
+            try:
+                result = None
+                for node in self.body:
+                    result = node.evaluate(lambda_context)
+                return result
+            finally:
+                context.exit_function_call(lambda_context)
+        return lambda_function
 
     def get_type(self, context):
-        """
-        Infer the type of the lambda expression based on the return type of its body.
-        """
-        try:
-            context.enter_scope()
-            context.enter_block(self.block_uuid)
+        # Type of lambda should be inferred from the return type of its body
+        if isinstance(self.body, list):
+            return self.body[-1].get_type(context)
+        return self.body.get_type(context)
 
-            return_type = self.body.get_type(context)
-
-            context.exit_block()
-            context.exit_scope()
-            return return_type
-        except Exception as e:
-            context.exit_block()
-            context.exit_scope()
-            self.handle_error(e, context)
-
-    def handle_error(self, error, context):
-        error_message = f"Error in lambda function with block UUID {self.block_uuid}: {str(error)}"
-        raise ParserError(error_message, node=self)
 
 
 class ApplyNode(ParserNode):
     def __init__(self, function, arguments):
-        super().__init__('apply', block_uuid=str(uuid.uuid4()))  # Generate a unique UUID for this apply node
-        self.function = function  # FunctionNode or LambdaNode
-        self.arguments = arguments  # List of ParserNodes for arguments
-
-    def children(self):
-        return [self.function] + self.arguments
+        super().__init__('apply')
+        self.function = function
+        self.arguments = arguments
 
     def evaluate(self, context):
-        try:
-            context.enter_block(self.block_uuid)  # Enter the block for this apply node
-            func = self.function.evaluate(context)
-            args = [arg.evaluate(context) for arg in self.arguments]
-            return func(*args)
-        except Exception as e:
-            self.handle_error(e, context)
-        finally:
-            context.exit_block()  # Ensure we exit the block after evaluation
+        func = self.function.evaluate(context)
+        args = [arg.evaluate(context) for arg in self.arguments]
+        return func(*args)  # Call the function with arguments
 
     def get_type(self, context):
-        try:
-            context.enter_block(self.block_uuid)  # Enter the block for type inference
-            func_type = self.function.get_type(context)
+        # This should reflect the return type of the function being applied
+        func_type = self.function.get_type(context)
+        # Validate the argument types if the function specifies expected types
+        expected_types = [param.get_type(context) for param in self.function.parameters]
+        given_types = [arg.get_type(context) for arg in self.arguments]
+        for expected, given in zip(expected_types, given_types):
+            if expected != given:
+                raise SLTypeError(f"Type mismatch in function call '{self.function}': expected {expected}, got {given}")
+        return func_type
 
-            # Ensure that the function's return type is consistent
-            if isinstance(func_type, list) and len(func_type) == len(self.arguments):
-                for arg, expected_type in zip(self.arguments, func_type):
-                    arg_type = arg.get_type(context)
-                    if arg_type != expected_type:
-                        raise TypeError(f"Argument type mismatch: expected {expected_type}, got {arg_type}")
-
-            context.exit_block()  # Exit the block after type inference
-            return func_type
-        except Exception as e:
-            self.handle_error(e, context)
-
-
-    def handle_error(self, error, context):
-        error_message = f"Error in apply operation with block UUID {self.block_uuid}: {str(error)}"
-        raise ParserError(error_message, node=self)

@@ -1,5 +1,7 @@
-from .base import ParserNode
-from ..exceptions import ParserError
+from StreamLanguage.ast.nodes.base import ParserNode
+from StreamLanguage.ast.exceptions import ParserError
+from StreamLanguage.exceptions import SLException
+
 
 class PrimitiveDataNode(ParserNode):
     """
@@ -10,7 +12,7 @@ class PrimitiveDataNode(ParserNode):
     """
 
     def __init__(self, value):
-        super().__init__(str(value), block_uuid=str(uuid.uuid4()))  # Generate a unique UUID for this primitive data node
+        super().__init__(str(value))  # Generate a unique UUID for this primitive data node
         self.value = value
 
     def children(self):
@@ -27,7 +29,7 @@ class PrimitiveDataNode(ParserNode):
             result = self.value
             context.exit_block()  # Exit the block after evaluation
             return result
-        except Exception as e:
+        except SLException as e:
             self.handle_error(e, context)
 
     def get_type(self, context):
@@ -52,7 +54,7 @@ class PrimitiveIntNode(PrimitiveDataNode):
             result_type = int  # Return the type for integer values
             context.exit_block()  # Exit the block after type checking
             return result_type
-        except Exception as e:
+        except SLException as e:
             self.handle_error(e, context)
 
 
@@ -66,7 +68,7 @@ class PrimitiveFloatNode(PrimitiveDataNode):
             result_type = float  # Return the type for float values
             context.exit_block()  # Exit the block after type checking
             return result_type
-        except Exception as e:
+        except SLException as e:
             self.handle_error(e, context)
 
 
@@ -80,7 +82,7 @@ class PrimitiveStringNode(PrimitiveDataNode):
             result_type = str  # Return the type for string values
             context.exit_block()  # Exit the block after type checking
             return result_type
-        except Exception as e:
+        except SLException as e:
             self.handle_error(e, context)
 
 
@@ -94,7 +96,7 @@ class PrimitiveBoolNode(PrimitiveDataNode):
             result_type = bool  # Return the type for boolean values
             context.exit_block()  # Exit the block after type checking
             return result_type
-        except Exception as e:
+        except SLException as e:
             self.handle_error(e, context)
 
 
@@ -116,7 +118,7 @@ class ArrayNode(ParserNode):
             result = [element.evaluate(context) for element in self.elements]
             context.exit_block()  # Exit the block after evaluation
             return result
-        except Exception as e:
+        except SLException as e:
             self.handle_error(e, context)
 
     def get_type(self, context):
@@ -138,7 +140,7 @@ class ArrayNode(ParserNode):
 
             context.exit_block()  # Exit the block after type checking
             return result_type
-        except Exception as e:
+        except SLException as e:
             self.handle_error(e, context)
 
     def handle_error(self, error, context):

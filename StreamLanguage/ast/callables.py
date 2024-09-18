@@ -1,4 +1,6 @@
-from .exceptions import ReturnException
+from StreamLanguage.ast.exceptions import ReturnException, SLTypeError
+from StreamLanguage.exceptions import SLException
+
 
 class Callable:
     def __init__(self, return_type=None, arg_types=None):
@@ -37,7 +39,7 @@ class Callable:
         :raises TypeError: If the argument count does not match.
         """
         if len(args) != len(self.arg_types):
-            raise TypeError(
+            raise SLTypeError(
                 f"Expected {len(self.arg_types)} arguments, but got {len(args)}"
             )
 
@@ -49,7 +51,7 @@ class Callable:
         """
         for i, (arg, expected_type) in enumerate(zip(args, self.arg_types)):
             if not isinstance(arg, expected_type):
-                raise TypeError(
+                raise SLTypeError(
                     f"Argument {i} expected to be of type {expected_type.__name__}, but got {type(arg).__name__}"
                 )
 
@@ -60,7 +62,7 @@ class Callable:
         :raises TypeError: If the return type does not match the expected return type.
         """
         if self.return_type and not isinstance(result, self.return_type):
-            raise TypeError(
+            raise SLTypeError(
                 f"Expected return type {self.return_type.__name__}, but got {type(result).__name__}"
             )
 
@@ -79,25 +81,26 @@ class CallableFunction(Callable):
         self.body = body
 
     def invoke(self, *args, context):
-        local_context = context.enter_function_call(self.name)
-
-        # Declare parameters without types initially
-        for param in self.parameters:
-            local_context.declare_variable(param.name)
-
-        # Bind parameters to arguments and infer/update types
-        for param, arg in zip(self.parameters, args):
-            param_type = param.get_type(local_context) if param.get_type(local_context) else type(arg)
-            local_context.assign(param.name, arg)
-            local_context.set_type(param.name, param_type)
-
-        # Execute the function body
-        result = None
+        """
+        Invoke the function with the provided arguments within the given context.
+        """
+        f_ctx = None
         try:
-            for node in self.body:
-                node.evaluate(local_context)
-        except ReturnException as re:
-            result = re.value
+            f_ctx = context.enter_function_call(self, args)  # Set up the function call context
 
-        context.exit_function_call(self.name)
-        return result
+            return_value = None
+            try:
+                for node in self.body:
+                    node.evaluate(f_ctx)
+            except ReturnException as re:
+                return_value = f_ctx.handle_return(re.value)
+
+            context.exit_function_call(f_ctx)  # Untrack function call
+            return return_value
+        except SLException as e:
+            context.exit_function_call(f_ctx)  # Ensure proper cleanup on error
+            self.handle_error(e, context)
+
+    def handle_error(self, e, context):
+        error_message = f"Error in function '{self.name}': {str(e)}"
+        raise SLException(error_message)
