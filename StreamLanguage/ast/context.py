@@ -186,16 +186,16 @@ class Context:
         if not self.can_define_function():
             raise FunctionDeclarationError(f"Cannot declare function '{name}' in this block type.")
 
-        function_info = {
+        function_info = {  # This may still be the best way to store function info, but i also need to store type hints if avaliable if not then defer to to runtime type checking
             'callable': function_callable,
             'parameters': parameters,
             'return_type': return_type
         }
 
         target_symbol_table = self.global_symbol_table if global_scope else self.local_symbol_tables[-1]
-        target_symbol_table.declare_function(name, parameters, function_info)
+        target_symbol_table.declare_function(name, parameters, function_info)  # NEed to figure out how I reallyu have to store functions and definatly overloads
 
-    def lookup_function(self, name):
+    def lookup_function(self, name):  # This will also need to be changed, the logic can be move dto symbol table instead
         for symbol_table in reversed(self.local_symbol_tables):
             if symbol_table.is_declared(name):
                 entry = symbol_table.lookup(name)
@@ -216,7 +216,7 @@ class Context:
     def is_recursive_call(self, caller, callee):
         return callee in self.call_stack
     # Loop Management
-    def enter_loop(self):
+    def enter_loop(self):  # IDK if I need these functions, was just adding stuff
         loop_uuid = str(uuid.uuid4())
         self.loop_stack.append(loop_uuid)
         self.enter_block(loop_uuid, BlockType.LOOP)  # Enter a new block for the loop
@@ -265,7 +265,7 @@ class Context:
         self.exit_block()
 
     # Debugging and Tracing
-    def dump_state(self):
+    def dump_state(self):  # This is just for debugging But I should set it up to call this during a fatal error to get a better stacktrace
         print("Current Block UUID:", self.get_current_block_uuid())
         print("Current Symbol Table:", self.local_symbol_tables[-1])
         print("Global Symbol Table:", self.global_symbol_table)
