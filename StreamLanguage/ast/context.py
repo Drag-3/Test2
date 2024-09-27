@@ -186,14 +186,7 @@ class Context:
         if not self.can_define_function():
             raise FunctionDeclarationError(f"Cannot declare function '{name}' in this block type.")
 
-        function_info = {  # This may still be the best way to store function info, but i also need to store type hints if avaliable if not then defer to to runtime type checking
-            'callable': function_callable,
-            'parameters': parameters,
-            'return_type': return_type
-        }
-
-        target_symbol_table = self.global_symbol_table if global_scope else self.local_symbol_tables[-1]
-        target_symbol_table.declare_function(name, parameters, function_info)  # NEed to figure out how I reallyu have to store functions and definatly overloads
+        fu
 
     def lookup_function(self, name):  # This will also need to be changed, the logic can be move dto symbol table instead
         for symbol_table in reversed(self.local_symbol_tables):

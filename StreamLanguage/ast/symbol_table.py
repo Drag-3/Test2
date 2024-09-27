@@ -52,11 +52,28 @@ class SymbolTable:
     def lookup(self, identifier):
         return self.entries.get(identifier, None)
 
-    def declare_function(self, identifier, type, parameters, value):
+    def declare_function(self, identifier, value):
+        """
+        Declare a function in the symbol table.
+        :param identifier: The name of the function
+        :param type: The optional return type of the function
+        :param value: A Data Struction Containing the function callable, type, and parameters
+        :return:
+        """
         if identifier in self.entries:
-            self.entries[identifier].add_overload(type, value)
+            # Get the amount of parameters in the existing function
+            num_params = len(self.entries[identifier].get('parameters', []))
+
+            if num_params == len(value.get('parameters', [])):
+                # Due to dynamic typing, we can't guarantee that the function signatures are the same,
+                # So ill err on the side of caution and not allow redeclaration
+                raise VariableRedeclaredError(f"Function '{identifier}' already declared")
+            else:
+                # Add the function as an overload
+                self.entries[identifier].add_overload(SymbolTableEntry(identifier, 'function', value))
+
         else:
-            self.entries[identifier] = SymbolTableEntry(identifier, type, value)
+            self.entries[identifier] = SymbolTableEntry(identifier, 'function', value)
 
     def is_declared(self, identifier):
         return identifier in self.entries
