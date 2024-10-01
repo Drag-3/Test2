@@ -124,8 +124,8 @@ class FunctionCallNode(ParserNode):
             context.enter_block(self.block_uuid, BlockType.FUNCTION)  # Enter the block for this function call
 
             # Lookup the function in the symbol table
-            func_info = context.lookup_function(self.function.name)
-            func = func_info.get('callable')
+            func_meta = context.lookup_function(self.function.name)
+            func = func_meta.find_overload(self.arguments).implementation
             args_values = [arg.evaluate(context) for arg in self.arguments]
             result = func.invoke(*args_values, context=context)
 

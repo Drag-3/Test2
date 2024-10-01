@@ -1,5 +1,6 @@
 import uuid
 
+from StreamLanguage.ast.function_metadata import FunctionMetadata
 from StreamLanguage.ast.symbol_table import SymbolTable
 from StreamLanguage.ast.exceptions import VariableNotDeclaredError, FunctionNotFoundError, SLRecursionError, \
     FunctionDeclarationError, VariableRedeclaredError
@@ -186,9 +187,16 @@ class Context:
         if not self.can_define_function():
             raise FunctionDeclarationError(f"Cannot declare function '{name}' in this block type.")
 
-        fu
+        # Create a new function metadata object
+        function_metadata = FunctionMetadata(name, parameters, function_callable, return_type)
 
-    def lookup_function(self, name):  # This will also need to be changed, the logic can be move dto symbol table instead
+        # Add function to correct scope
+        if global_scope:
+            self.global_symbol_table.declare_function(function_metadata)
+        else:
+            self.local_symbol_tables[-1].declare_function(function_metadata)
+
+    def lookup_function(self, name):
         for symbol_table in reversed(self.local_symbol_tables):
             if symbol_table.is_declared(name):
                 entry = symbol_table.lookup(name)

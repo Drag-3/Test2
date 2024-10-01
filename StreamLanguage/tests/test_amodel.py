@@ -1,12 +1,15 @@
 import unittest
 
 from StreamLanguage.ast.context import Context
+from StreamLanguage.ast.exceptions import SLValueError
 from StreamLanguage.ast.nodes.error_handling import TryCatchNode
 from StreamLanguage.ast.nodes.expressions import IdentifierNode, AssignmentNode, BinaryOperationNode, UnaryOperationNode
 from StreamLanguage.ast.nodes.flow_control import IfNode
 from StreamLanguage.ast.nodes.functions import ReturnNode, FunctionNode, FunctionCallNode, LambdaNode, ApplyNode
 from StreamLanguage.ast.nodes.structure import VariableDeclarationNode
 from StreamLanguage.ast.nodes.types import PrimitiveIntNode, PrimitiveStringNode, ArrayNode
+from StreamLanguage.types.data_instances.primatives.integer import SLInteger
+from StreamLanguage.types.meta_type.primatives.integer_type import SLIntegerType
 
 
 class TestASTModel(unittest.TestCase):
@@ -79,12 +82,28 @@ class TestASTModel(unittest.TestCase):
 
     def test_try_catch_node(self):
         """Test TryCatchNode for handling exceptions."""
-        try_block = [
-            BinaryOperationNode('/', PrimitiveIntNode(10), PrimitiveIntNode(0))]  # Will raise ZeroDivisionError
-        catch_block = (ZeroDivisionError, [ReturnNode(PrimitiveStringNode("Caught an error"))])
-        try_catch_node = TryCatchNode(try_block, catch_block)
-        result = try_catch_node.evaluate(self.context)
-        self.assertEqual(result, "Caught an error")
+    #TODO: Remember to go back and include the TYpe system in the context and symbol table
+        function_body = [
+            TryCatchNode(
+                try_block=[ReturnNode(BinaryOperationNode('/', IdentifierNode('a'), IdentifierNode('b')))],
+                catch_block=(SLValueError, [ReturnNode(PrimitiveIntNode(0))])
+            )
+        ]
+        function = FunctionNode('divide', [IdentifierNode('a'), IdentifierNode('b')],
+                                function_body, return_type=SLIntegerType())
+        function.evaluate(self.context)
+
+        # Invoke the function with a valid division
+        func_call = FunctionCallNode(IdentifierNode('divide'), [PrimitiveIntNode(10), PrimitiveIntNode(2)])
+        result = func_call.evaluate(self.context)
+        self.assertEqual(result, SLInteger(5))
+
+        # Invoke the function with an invalid division
+        func_call = FunctionCallNode(IdentifierNode('divide'), [PrimitiveIntNode(10), PrimitiveIntNode(0)])
+        result = func_call.evaluate(self.context)
+        self.assertEqual(result, SLInteger(0))
+
+
 
     def test_array_node(self):
         """Test ArrayNode for correct evaluation and type checking."""
@@ -217,5 +236,10 @@ class TestASTModel(unittest.TestCase):
         func_call = FunctionCallNode(IdentifierNode('add'), [PrimitiveIntNode(5)])
         result = func_call.evaluate(self.context)
         self.assertEqual(result, 5)
+
+        # Now invoke the function with two arguments
+        func_call = FunctionCallNode(IdentifierNode('add'), [PrimitiveIntNode(5), PrimitiveIntNode(3)])
+        result = func_call.evaluate(self.context)
+        self.assertEqual(result, 8)
 if __name__ == '__main__':
     unittest.main()
