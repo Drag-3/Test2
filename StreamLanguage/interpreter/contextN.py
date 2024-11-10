@@ -112,8 +112,8 @@ class Context:
                 # Function execution logic
                 pass
         except Exception as e:
-            # Optionally log or handle the exception
-            raise e  # Re-raise to ensure the calling context is aware
+
+            raise e
 
     def get_call_stack_trace(self):
         trace = ""
