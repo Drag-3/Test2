@@ -1,9 +1,12 @@
-from StreamLanguage.types.base import SLType
+from StreamLanguage.types.meta_type.meta_base import SLMetaType
 
-class SLStackType(SLType):
-    def to_python_type(self):
-        # This method would conceptually return the Python equivalent type for system-level operations.
-        return list
+class SLStackType(SLMetaType):
+    """
+    Represents the stack type in StreamLanguage.
+    """
+
+    def __init__(self):
+        super().__init__("Stack")
 
     def __str__(self):
-        return "SLStack"
+        return "Stack"

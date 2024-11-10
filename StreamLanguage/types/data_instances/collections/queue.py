@@ -1,25 +1,36 @@
-from StreamLanguage.types.base import SLType
-from StreamLanguage.types.meta_type.collections.queue_type import SLQueueType
-from StreamLanguage.types.data_instances.primatives.string import SLString
+from StreamLanguage.types.data_instances.instance_base import SLInstanceType
 
-class SLQueue(SLType):
-    type_descriptor = SLQueueType()
+class SLQueue(SLInstanceType):
+    """
+    Represents a queue in StreamLanguage.
+    """
+    type_descriptor = None  # Will be attached during registration
 
-    def __init__(self, value):
-        if not isinstance(value, list):
-            raise TypeError("SLQueue requires a list")
-        self.value = value
+    def __init__(self, value=None):
+        if isinstance(value, SLQueue):
+            self.value = value.value
+        elif isinstance(value, list):
+            self.value = value
+        else:
+            raise TypeError("SLQueue requires a list or another SLQueue")
+
+    def enqueue(self, element):
+        self.value.append(element)
+
+    def dequeue(self):
+        if not self.value:
+            raise IndexError("Queue is empty")
+        return self.value.pop(0)
 
     def to_slstring(self):
+        from StreamLanguage.types.data_instances.primatives.string import SLString
         return SLString(str(self.value))
-
-    def to_python_type(self):
-        return self.value
 
     def __str__(self):
         return str(self.value)
 
-    def __add__(self, other):
-        if isinstance(other, SLQueue):
-            return SLQueue(self.value + other.value)
-        return NotImplemented
+    def __len__(self):
+        return len(self.value)
+
+    def __iter__(self):
+        return iter(self.value)

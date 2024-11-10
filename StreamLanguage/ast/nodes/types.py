@@ -1,6 +1,10 @@
 from StreamLanguage.ast.nodes.base import ParserNode
 from StreamLanguage.ast.exceptions import ParserError
 from StreamLanguage.exceptions import SLException
+from StreamLanguage.types.meta_type.primatives.boolean_type import SLBooleanType
+from StreamLanguage.types.meta_type.primatives.float_type import SLFloatType
+from StreamLanguage.types.meta_type.primatives.integer_type import SLIntegerType
+from StreamLanguage.types.meta_type.primatives.string_type import SLStringType
 
 
 class PrimitiveDataNode(ParserNode):
@@ -11,9 +15,10 @@ class PrimitiveDataNode(ParserNode):
         value: The actual data value stored in the node.
     """
 
-    def __init__(self, value):
+    def __init__(self, value, node_type = None):
         super().__init__(str(value))  # Generate a unique UUID for this primitive data node
         self.value = value
+        self.node_type = node_type
 
     def children(self):
         # Primitive data nodes do not have child nodes as they represent leaf nodes in the AST
@@ -37,7 +42,7 @@ class PrimitiveDataNode(ParserNode):
         Determine and return the type of the primitive data.
         This method must be overridden in subclasses to return the correct type.
         """
-        raise NotImplementedError("This method should be implemented by subclasses")
+        return self.node_type
 
     def handle_error(self, error, context):
         error_message = f"Error in primitive data node with block UUID {self.block_uuid}: {str(error)}"
@@ -46,58 +51,22 @@ class PrimitiveDataNode(ParserNode):
 
 class PrimitiveIntNode(PrimitiveDataNode):
     def __init__(self, value):
-        super().__init__(value)
-
-    def get_type(self, context):
-        try:
-            context.enter_block(self.block_uuid)  # Enter the block for type checking
-            result_type = int  # Return the type for integer values
-            context.exit_block()  # Exit the block after type checking
-            return result_type
-        except SLException as e:
-            self.handle_error(e, context)
+        super().__init__(value, SLIntegerType())
 
 
 class PrimitiveFloatNode(PrimitiveDataNode):
     def __init__(self, value):
-        super().__init__(value)
-
-    def get_type(self, context):
-        try:
-            context.enter_block(self.block_uuid)  # Enter the block for type checking
-            result_type = float  # Return the type for float values
-            context.exit_block()  # Exit the block after type checking
-            return result_type
-        except SLException as e:
-            self.handle_error(e, context)
+        super().__init__(value, SLFloatType())
 
 
 class PrimitiveStringNode(PrimitiveDataNode):
     def __init__(self, value):
-        super().__init__(value)
-
-    def get_type(self, context):
-        try:
-            context.enter_block(self.block_uuid)  # Enter the block for type checking
-            result_type = str  # Return the type for string values
-            context.exit_block()  # Exit the block after type checking
-            return result_type
-        except SLException as e:
-            self.handle_error(e, context)
+        super().__init__(value, SLStringType())
 
 
 class PrimitiveBoolNode(PrimitiveDataNode):
     def __init__(self, value):
-        super().__init__(value)
-
-    def get_type(self, context):
-        try:
-            context.enter_block(self.block_uuid)  # Enter the block for type checking
-            result_type = bool  # Return the type for boolean values
-            context.exit_block()  # Exit the block after type checking
-            return result_type
-        except SLException as e:
-            self.handle_error(e, context)
+        super().__init__(value, SLBooleanType)
 
 
 class ArrayNode(ParserNode):

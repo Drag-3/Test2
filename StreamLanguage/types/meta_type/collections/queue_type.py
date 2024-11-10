@@ -1,9 +1,12 @@
-from StreamLanguage.types.base import SLType
+from StreamLanguage.types.meta_type.meta_base import SLMetaType
 
-class SLQueueType(SLType):
-    def to_python_type(self):
-        # This method would conceptually return the Python equivalent type for system-level operations.
-        return list
+class SLQueueType(SLMetaType):
+    """
+    Represents the queue type in StreamLanguage.
+    """
+
+    def __init__(self):
+        super().__init__("Queue")
 
     def __str__(self):
-        return "SLQueue"
+        return "Queue"

@@ -1,9 +1,12 @@
-from StreamLanguage.types.base import SLType
+from StreamLanguage.types.meta_type.meta_base import SLMetaType
 
-class SLFloatType(SLType):
-    def to_python_type(self):
-        # This method would conceptually return the Python equivalent type for system-level operations.
-        return float
+class SLFloatType(SLMetaType):
+    """
+    Represents the float type in StreamLanguage.
+    """
+
+    def __init__(self):
+        super().__init__("Float")
 
     def __str__(self):
-        return "SLFloat"
+        return "Float"

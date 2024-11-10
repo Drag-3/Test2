@@ -1,7 +1,7 @@
 import uuid
 
-from StreamLanguage.ast.function_metadata import FunctionMetadata
-from StreamLanguage.ast.symbol_table import SymbolTable
+from StreamLanguage.interpreter.function_metadata import FunctionMetadata
+from StreamLanguage.interpreter.symbol_table import SymbolTable
 from StreamLanguage.ast.exceptions import VariableNotDeclaredError, FunctionNotFoundError, SLRecursionError, \
     FunctionDeclarationError, VariableRedeclaredError
 from StreamLanguage.ast.block_types import BlockFlags, BlockType
