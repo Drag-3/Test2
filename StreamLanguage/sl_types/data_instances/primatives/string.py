@@ -21,6 +21,19 @@ class SLString(SLInstanceType):
     def __add__(self, other):
         if isinstance(other, SLString):
             return SLString(self.value + other.value)
+        elif isinstance(other, str):
+            return SLString(self.value + other)
+        elif isinstance(other, SLInstanceType):  # Convert to string and add (Concatenation)
+            return SLString(self.value + other.to_slstring())
+        return NotImplemented
+
+    def __radd__(self, other):
+        if isinstance(other, SLString):
+            return SLString(other.value + self.value)
+        elif isinstance(other, str):
+            return SLString(other + self.value)
+        elif isinstance(other, SLInstanceType):  # Convert to string and add (Concatenation)
+            return SLString(other.to_slstring() + self.value)
         return NotImplemented
 
     def __eq__(self, other):

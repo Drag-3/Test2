@@ -1,5 +1,6 @@
 from contextlib import contextmanager
 
+from StreamLanguage.ast.block_types import BlockType, BlockFlags
 from StreamLanguage.ast.callables import CallableFunction
 from StreamLanguage.ast.exceptions import SLRecursionError, FunctionNotFoundError
 from StreamLanguage.ast.nodes.base import ParserNode
@@ -17,13 +18,17 @@ class Context:
         self.MAX_RECURSION_DEPTH = 1000
         self.parent = parent
         self.context_type = context_type or 'generic'
-        self.current_symbol_table = SymbolTable(parent=self.parent.current_symbol_table if self.parent else None)
+        self.global_symbol_table = SymbolTable()
+        self.current_symbol_table = self.global_symbol_table
         # Other attributes remain the same
         self.blocks_stack = []  # Stack to manage block UUIDs
         self.recursion_depth = {}
         self.control_flow = ControlFlowManager()
         self.call_stack = []  # Stack to maintain function call trace
         self.loop_stack = []  # Stack to manage loop states
+
+    def is_global_scope(self):
+        return not self.call_stack and (not self.blocks_stack or self.blocks_stack[-1].block_type.value & BlockFlags.GLOBAL_SCOPE) # No active blocks or function calls
 
     def enter_scope(self):
         self.current_symbol_table = SymbolTable(parent=self.current_symbol_table)
@@ -67,18 +72,22 @@ class Context:
         return True  # Default to allowing functions at the global scope
 
     def declare_variable(self, identifier, t=None, v=None):
-        self.current_symbol_table.declare(identifier, t, v)
+        if self.is_global_scope():
+            self.global_symbol_table.declare(identifier, t, v)
+        else:
+            self.current_symbol_table.declare(identifier, t, v)
 
     def declare_function(self, identifier, callable_object, parameters, return_type=None):
         # Check if functions can be defined in the current context
         if not self.can_define_function():
             raise Exception("Cannot define functions in the current context")
 
-        # Create a function Metadata object
+        #Create a new FunctionMetadata object
         metadata = FunctionMetadata(identifier, parameters, callable_object, return_type)
-
-        # Declare the function in the symbol table // overloads handled in SymbolTable
-        self.current_symbol_table.declare_function(metadata)
+        if self.is_global_scope():  # Declare the function in the global scope
+            self.global_symbol_table.declare_function(metadata)
+        else:
+            self.current_symbol_table.declare_function(metadata)
 
 
     def lookup(self, identifier):

@@ -91,7 +91,14 @@ class Parser:
         '''function_definition : FN IDENTIFIER LPAREN opt_param_list RPAREN block_statement
                                | FN IDENTIFIER LPAREN opt_param_list RPAREN typehint block_statement'''
         function_name = IdentifierNode(p[2])
-        parameters = p[4]  # List of parameters
+        params = p[4]  # List of parameters (param, None/Type)
+        parameters, type_hints = [], []
+
+        if params:
+            for param in params:
+                parameters.append(param[0])
+                type_hints.append(param[1])
+
         if len(p) == 7:
             body = p[6]  # Function body
             p[0] = FunctionNode(function_name, parameters, body)
@@ -144,15 +151,14 @@ class Parser:
         else:  # multiple params
             p[0] = p[1] + [p[3]]  # append new param
 
-
     def p_param(self, p):
         '''param : IDENTIFIER
                  | IDENTIFIER typehint'''
         identifier = IdentifierNode(p[1])
         if len(p) == 2:
-            p[0] = (identifier, None)
+            p[0] = [identifier, None]
         else:
-            p[0] = (identifier, p[2])  # parameter name, type hint
+            p[0] = [identifier, p[2]]  # parameter name, type hint
 
     # A declaration is a statement that declares a variable or constant
     def p_declaration(self, p):

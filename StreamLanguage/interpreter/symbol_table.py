@@ -87,11 +87,12 @@ class SymbolTable:
 
 
 class SymbolTable:
-    def __init__(self, parent=None, is_restricted=False):
+    def __init__(self, parent=None, is_restricted=False, global_symbol_table=None):
         self.parent = parent
         self.is_restricted = is_restricted
+        self.global_symbol_table = global_symbol_table or (parent.global_symbol_table if parent else self)  # Global symbol table
         self.entries = {}
-        self.nonlocal_entries = set() # Set of nonlocal variables only store the name of the variable
+        self.nonlocal_entries = set()
 
     def declare(self, identifier, t, value=None, is_constant=False, is_global=False, is_nonlocal=False):
         # Check for shadowing
@@ -113,16 +114,17 @@ class SymbolTable:
 
     
     def lookup(self, identifier):
-        if identifier in self.entries:  # Declared in the current scope
+        if identifier in self.entries:
             return self.entries[identifier]
-
-        if identifier in self.nonlocal_entries:  # Explicitly declared as nonlocal, this works in any scope type
-            return self._parent_lookup(identifier)
-
-        if self.is_restricted: # Restricted scope, no access to parent scopes (functions)
+        elif self.is_restricted:
+            if identifier in self.nonlocal_entries:  # Check nonlocal entries
+                return self._parent_lookup(identifier)
+            else:  # Restricted scope, no access to parent scopes except global
+                return self.global_symbol_table.lookup(identifier)
+        elif self.parent:
+            return self.parent.lookup(identifier)
+        else:
             raise VariableNotDeclaredError(f"Variable '{identifier}' is not declared.")
-
-        return self._parent_lookup(identifier)  # Non strict mode, look in parent scopes
 
     def lookup_type(self, identifier):
         entry = self.lookup(identifier)
@@ -145,12 +147,27 @@ class SymbolTable:
             if entry.is_constant:
                 raise Exception("Cannot reassign value to a constant variable")
             entry.value = value
+        elif self.is_restricted:
+            if identifier in self.nonlocal_entries:
+                self._parent_update(identifier, value)
+            else:
+                self.global_symbol_table.update(identifier, value)
         elif self.parent:
-            if self.is_restricted and identifier not in self.nonlocal_entries:  # Restricted scope, no access to parent scopes unless nonlocal
-                raise VariableNotDeclaredError(f"Variable '{identifier}' is not declared.")
             self.parent.update(identifier, value)
         else:
             raise VariableNotDeclaredError(f"Variable '{identifier}' is not declared.")
+
+    def _parent_update(self, identifier, value):
+        current_scope = self.parent
+        while current_scope:
+            entry = current_scope.entries.get(identifier)
+            if entry:
+                if entry.is_constant:
+                    raise Exception("Cannot reassign value to a constant variable")
+                entry.value = value
+                return
+            current_scope = current_scope.parent
+        raise VariableNotDeclaredError(f"Nonlocal variable '{identifier}' is not declared in any accessible scope.")
 
     def update_type(self, identifier, t: SLType):
         if identifier in self.entries:

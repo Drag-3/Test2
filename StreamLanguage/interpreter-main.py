@@ -3,7 +3,7 @@ from StreamLanguage.interpreter.interpreter import Interpreter
 
 
 def main_test():
-    with open("test.sl", "r") as file:
+    with open("fib.sl", "r") as file:
         text = file.read()
 
     interpreter = Interpreter()
