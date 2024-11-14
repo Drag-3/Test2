@@ -3,15 +3,18 @@ from StreamLanguage.ast.exceptions import VariableRedeclaredError, FunctionNotFo
 
 class FunctionOverload:
     def __init__(self, parameters, return_type, body):
+        if parameters is None:
+            parameters = []
+
         self.parameters = parameters
         self.return_type = return_type
         self.implementation = body
 
     def matches(self, argument_types):
         """
-        Check if the overload matches the provided argument types based on parameter count.
+        Check if the overload matches the provided argument sl_types based on parameter count.
 
-        :param argument_types: List of argument types.
+        :param argument_types: List of argument sl_types.
         :return: True if matches, False otherwise.
         """
         return len(self.parameters) == len(argument_types)
@@ -30,7 +33,7 @@ class FunctionMetadata:
     def add_overload(self, parameters, return_type, body):
         """
         Add a new overload to the function
-        We only check for the number of parameters since we don't know the types of the parameters
+        We only check for the number of parameters since we don't know the sl_types of the parameters
         :param parameters:
         :param return_type:
         :param body:

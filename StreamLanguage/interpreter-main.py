@@ -1,14 +1,18 @@
-from parser import parse
-from interpreter import Interpretor
+# This file is the main file for the interpreter
+from StreamLanguage.interpreter.interpreter import Interpreter
 
-def main():
-    with open("test.sl", "r") as f:
-        code = f.read()
-    ast = parse(code)
-    interpretor = Interpretor()
-    interpretor.run(ast)
-    print(interpretor.output)
+
+def main_test():
+    with open("test.sl", "r") as file:
+        text = file.read()
+
+    interpreter = Interpreter()
+    result = interpreter.interpret(text)
+
+    print(result)
+
+
 
 
 if __name__ == "__main__":
-    main()
+    main_test()

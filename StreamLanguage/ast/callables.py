@@ -7,10 +7,10 @@ class Callable:
         """
         Initialize the callable object.
         :param return_type: The expected return type of the callable (optional).
-        :param arg_types: A list of expected argument types (optional).
+        :param arg_types: A list of expected argument sl_types (optional).
         """
         self.return_type = return_type  # Expected return type
-        self.arg_types = arg_types or []  # List of expected argument types
+        self.arg_types = arg_types or []  # List of expected argument sl_types
 
     def __call__(self, *args):
         """
@@ -45,7 +45,7 @@ class Callable:
 
     def _check_argument_types(self, args):
         """
-        Check if the types of the arguments match the expected types.
+        Check if the sl_types of the arguments match the expected sl_types.
         :param args: Arguments passed to the callable.
         :raises TypeError: If an argument type does not match the expected type.
         """
@@ -75,6 +75,9 @@ class Callable:
 
 class CallableFunction(Callable):
     def __init__(self, name, parameters, body, return_type=None):
+
+        if parameters is None:
+            parameters = []
         super().__init__(return_type=return_type, arg_types=[])
         self.name = name
         self.parameters = parameters
@@ -84,23 +87,40 @@ class CallableFunction(Callable):
         """
         Invoke the function with the provided arguments within the given context.
         """
-        f_ctx = None
+        # Enter function call context
+        context.enter_function_call(self, args)
+        context.control_flow.reset()  # Reset control flow signals
         try:
-            f_ctx = context.enter_function_call(self, args)  # Set up the function call context
+            # Evaluate each statement in the function body
+            for node in self.body:
+                node.evaluate(context)
 
-            return_value = None
-            try:
-                for node in self.body:
-                    node.evaluate(f_ctx)
-            except ReturnException as re:
-                return_value = f_ctx.handle_return(re.value)
+                # Check for return signal
+                if context.control_flow.should_return:
+                    return_value = context.control_flow.return_value
+                    metadata = context.control_flow.return_metadata
 
-            context.exit_function_call(f_ctx)  # Untrack function call
-            return return_value
+                    self.handle_return_metadata(metadata)
+                    return return_value
+
+                # Handle unexpected break/continue signals
+                if context.control_flow.should_break or context.control_flow.should_continue:
+                    raise SLException("Invalid 'break' or 'continue' outside of a loop")
+            return None  # Function completed without a return statement
         except SLException as e:
-            context.exit_function_call(f_ctx)  # Ensure proper cleanup on error
-            self.handle_error(e, context)
+            context.exit_function_call()
+            raise e
+        finally:
+            context.control_flow.reset()  # Reset control flow signals
+            context.exit_function_call()
 
-    def handle_error(self, e, context):
+    def handle_return_metadata(self, metadata):
+        # Process or log the metadata as needed
+        block_info = metadata.get('block_info')
+        stack_trace = metadata.get('stack_trace')
+
+        # Add a debug log with logging module
+
+def handle_error(self, e, context):
         error_message = f"Error in function '{self.name}': {str(e)}"
         raise SLException(error_message)

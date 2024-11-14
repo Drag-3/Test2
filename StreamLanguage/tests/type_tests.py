@@ -1,11 +1,11 @@
 import unittest
-from StreamLanguage.types.data_instances.primatives.integer import SLInteger
-from StreamLanguage.types.data_instances.primatives.float import SLFloat
-from StreamLanguage.types.data_instances.collections.array import SLArray
-from StreamLanguage.types.data_instances.primatives.string import SLString
-from StreamLanguage.types.meta_type.primatives.integer_type import SLIntegerType
-from StreamLanguage.types.meta_type.primatives.float_type import SLFloatType
-from StreamLanguage.types.meta_type.collections.array_type import SLArrayType
+from StreamLanguage.sl_types.data_instances.primatives.integer import SLInteger
+from StreamLanguage.sl_types.data_instances.primatives.float import SLFloat
+from StreamLanguage.sl_types.data_instances.collections.array import SLArray
+from StreamLanguage.sl_types.data_instances.primatives.string import SLString
+from StreamLanguage.sl_types.meta_type.primatives.integer_type import SLIntegerType
+from StreamLanguage.sl_types.meta_type.primatives.float_type import SLFloatType
+from StreamLanguage.sl_types.meta_type.collections.array_type import SLArrayType
 
 class TestSLTypes(unittest.TestCase):
 

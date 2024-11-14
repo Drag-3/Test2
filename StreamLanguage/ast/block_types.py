@@ -10,7 +10,7 @@ class BlockFlags(IntFlag):
     CAN_BREAK = 32       # Can contain break statements
     CAN_CONTINUE = 64    # Can contain continue statements
 
-# Define the block types using the flags
+# Define the block sl_types using the flags
 class BlockType(Enum):
     DEFAULT = BlockFlags.LOCAL_SCOPE
     FUNCTION = BlockFlags.ALLOW_FUNCTIONS | BlockFlags.LOCAL_SCOPE | BlockFlags.CAN_RETURN
@@ -22,4 +22,5 @@ class BlockType(Enum):
     FINALLY = BlockFlags.LOCAL_SCOPE
     GLOBAL = BlockFlags.GLOBAL_SCOPE | BlockFlags.ALLOW_FUNCTIONS
     PROGRAM = BlockFlags.GLOBAL_SCOPE | BlockFlags.ALLOW_FUNCTIONS
+    RETURN = BlockFlags.CAN_RETURN
 

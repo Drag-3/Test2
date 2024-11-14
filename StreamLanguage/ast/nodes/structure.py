@@ -1,27 +1,36 @@
 from StreamLanguage.ast.nodes.base import ParserNode
-from StreamLanguage.ast.exceptions import ParserError, VariableRedeclaredError
+from StreamLanguage.ast.exceptions import ParserError, VariableRedeclaredError, SLTypeError
 from StreamLanguage.ast.block_types import BlockType
 from StreamLanguage.exceptions import SLException
+from StreamLanguage.interpreter.contextN import Context
+from StreamLanguage.sl_types.base import SLType
 
 
 class ProgramNode(ParserNode):
     def __init__(self, nodes):
         super().__init__('program')
-        self.nodes = nodes  # List of ParserNodes representing the program statements
+        self.nodes = nodes
 
     def children(self) -> list['ParserNode']:
         return self.nodes
 
     def evaluate(self, context):
         try:
-            context.enter_block(self.block_uuid, BlockType.PROGRAM)
-            for node in self.nodes:
-                node.evaluate(context)
+            with context.block_context(BlockType.PROGRAM, self.block_uuid):
+                for node in self.nodes:
+                    node.evaluate(context)
+                    # Check for control flow signals
+                    if context.control_flow.should_return:
+                        context.control_flow.should_return = False
+                        context.control_flow.return_value = None
+                        raise ParserError("Return statement outside function", node=node)
+                    if context.control_flow.should_break or context.control_flow.should_continue:
+                        # Reset break and continue signals
+                        context.control_flow.should_break = False
+                        context.control_flow.should_continue = False
+                        raise ParserError(f"{'Break' if context.control_flow.should_break else 'Continue'} statement outside loop", node=node)
         except SLException as e:
             self.handle_error(e, context)
-        finally:
-            context.exit_block()  # Ensure block is exited in all cases
-
 
     def get_type(self, context):
         try:
@@ -33,6 +42,7 @@ class ProgramNode(ParserNode):
     def handle_error(self, error, context):
         error_message = f"Error in program block UUID {self.block_uuid}: {str(error)}"
         raise ParserError(error_message, node=self)
+
 
 class VariableDeclarationNode(ParserNode):
     """
@@ -54,42 +64,36 @@ class VariableDeclarationNode(ParserNode):
         self.value = value
 
     def children(self):
-        # Return the identifier and value as child nodes if a value is provided
         children = [self.identifier]
         if self.value:
             children.append(self.value)
         return children
 
-    def evaluate(self, context):
-        """
-        Evaluate the variable declaration within the given context.
-        This involves optionally initializing the variable and updating the context with its value and type.
-        This evaluation does not return a value, as it is a declaration statement.
-        """
+    def evaluate(self, context: Context):
         try:
             # Check if the variable is already declared in the current scope
-            if context.is_declared(self.identifier.name):
-                raise VariableRedeclaredError(f"Variable '{self.identifier.name}' already declared")
+            if context.current_symbol_table.is_declared(self.identifier.name):
+                raise VariableRedeclaredError(f"Variable '{self.identifier.name}' already declared in the current scope")
 
             # If a value is provided, evaluate it and assign it to the variable
             if self.value:
                 value = self.value.evaluate(context)
-                value_type = type(value)
-                context.declare_variable(self.identifier.name, type(value))
-                context.assign(self.identifier.name, value)
+                value_type = value.type_descriptor
+
+                # If a type hint is provided, check for type compatibility
+                if self.type_hint and value_type != self.type_hint:
+                    raise SLTypeError(f"Type mismatch: Variable '{self.identifier.name}' expected type {self.type_hint}, but got {value_type}")
+
+                context.declare_variable(self.identifier.name, t=value_type, v=value)
             else:
-                # If no value is provided, just declare the variable with the optional type hint
+                # If no value is provided, declare the variable with the type hint or None
                 value_type = self.type_hint or None
                 value = None
-                context.declare_variable(self.identifier.name, value_type, value)
+                context.declare_variable(self.identifier.name, t=value_type, v=value)
         except SLException as e:
             self.handle_error(e, context)
 
     def get_type(self, context):
-        """
-        Determine and return the type of the variable being declared.
-        This might be the type hint if provided, or the type of the initial value.
-        """
         if self.type_hint:
             return self.type_hint
         elif self.value:

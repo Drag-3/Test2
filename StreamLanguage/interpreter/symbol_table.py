@@ -1,4 +1,6 @@
 from StreamLanguage.ast.exceptions import VariableNotDeclaredError, SLTypeError, VariableRedeclaredError
+from StreamLanguage.interpreter.function_metadata import FunctionMetadata
+from StreamLanguage.sl_types.base import SLType
 
 
 class SymbolTableEntry:
@@ -122,6 +124,12 @@ class SymbolTable:
 
         return self._parent_lookup(identifier)  # Non strict mode, look in parent scopes
 
+    def lookup_type(self, identifier):
+        entry = self.lookup(identifier)
+        if not entry.type:
+            return None  # No type specified or Null
+        return entry.type()
+
     def _parent_lookup(self, identifier):
         current_scope = self.parent
         while current_scope:
@@ -144,6 +152,18 @@ class SymbolTable:
         else:
             raise VariableNotDeclaredError(f"Variable '{identifier}' is not declared.")
 
+    def update_type(self, identifier, t: SLType):
+        if identifier in self.entries:
+            entry = self.entries[identifier]
+            entry.type = t
+        elif self.parent:
+            if self.is_restricted and identifier not in self.nonlocal_entries:
+                raise VariableNotDeclaredError(f"Variable '{identifier}' is not declared.")
+            self.parent.update_type(identifier, t)
+        else:
+            raise VariableNotDeclaredError(f"Variable '{identifier}' is not declared.")
+
+
     def declare_function(self, metadata):
         if not self.is_declared(metadata.name):
             self.declare(metadata.name, 'function', metadata)
@@ -154,6 +174,16 @@ class SymbolTable:
                 raise SLTypeError(f"Symbol '{metadata.name}' is not a function")
             # Apply the new overload
             entry.value.merge(metadata)
+
+    def lookup_function(self, identifier, params):
+        entry = self.lookup(identifier)
+        if entry.type != 'function':
+            raise SLTypeError(f"Symbol '{identifier}' is not a function")
+        f_overload: FunctionMetadata = entry.value.find_overload(params)
+        if not f_overload:
+            raise SLTypeError(f"Function '{identifier}' does not accept the given parameters")
+        return f_overload
+
 
     def cleanup(self):
         for entry in self.entries.values():

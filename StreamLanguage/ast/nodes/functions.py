@@ -1,8 +1,12 @@
+from importlib.metadata import metadata
+
 from StreamLanguage.ast.nodes.base import ParserNode
+from StreamLanguage.ast.nodes.expressions import IdentifierNode
 from StreamLanguage.ast.nodes.flow_control import IfNode
 from StreamLanguage.ast.exceptions import ParserError, FunctionNotFoundError, SLRecursionError, ReturnException, SLTypeError
 from StreamLanguage.exceptions import SLException
-from StreamLanguage.ast.symbol_table import SymbolTableEntry
+from StreamLanguage.interpreter.contextN import Context
+from StreamLanguage.interpreter.symbol_table import SymbolTableEntry
 from StreamLanguage.ast.callables import CallableFunction
 from StreamLanguage.ast.block_types import BlockType
 import uuid
@@ -23,9 +27,14 @@ class FunctionNode(ParserNode):
     """
 
     BLOCKTYPE = BlockType.FUNCTION
-    def __init__(self, name, parameters, body, return_type=None):
-        super().__init__(name)  # Generate a unique UUID for this function node
-        self.name = name
+    def __init__(self, identifier_node, parameters, body, return_type=None):
+        if isinstance(identifier_node, str):
+            identifier_node = IdentifierNode(identifier_node)
+        if not isinstance(identifier_node, IdentifierNode):
+            raise TypeError("Function name must be an IdentifierNode or a string")
+
+        super().__init__(identifier_node.name)  # Generate a unique UUID for this function node
+        self.name = identifier_node.name
         self.parameters = parameters
         self.body = body
         self.return_type = return_type
@@ -34,9 +43,9 @@ class FunctionNode(ParserNode):
         # Return all parameters and body nodes as children
         return self.parameters + self.body
 
-    def evaluate(self, context):
+    def evaluate(self, context: Context):
         callable_function = CallableFunction(self.name, self.parameters, self.body, self.return_type)
-        context.declare_function(self.name, callable_function, self.parameters, self.return_type, global_scope=False)
+        context.declare_function(self.name, callable_function, self.parameters, self.return_type)
 
 
     def check_for_infinite_recursion(self, context):
@@ -110,10 +119,10 @@ class FunctionCallNode(ParserNode):
         arguments (list): A list of expressions representing the function call arguments.
     """
 
-    def __init__(self, function, arguments):
+    def __init__(self, function: IdentifierNode, arguments: list[ParserNode]):
         super().__init__('call', block_uuid=str(uuid.uuid4()))  # Generate a unique UUID for this function call
-        self.function = function
-        self.arguments = arguments
+        self.function = function  # IdentifierNode or similar
+        self.arguments = arguments  # List of ParserNodes
 
     def children(self):
         # Returns all nodes related to the function and its arguments
@@ -121,20 +130,8 @@ class FunctionCallNode(ParserNode):
 
     def evaluate(self, context):
         try:
-            context.enter_block(self.block_uuid, BlockType.FUNCTION)  # Enter the block for this function call
-
-            # Lookup the function in the symbol table
-            func_meta = context.lookup_function(self.function.name)
-            func = func_meta.find_overload(self.arguments).implementation
-            args_values = [arg.evaluate(context) for arg in self.arguments]
-            result = func.invoke(*args_values, context=context)
-
-            context.exit_block()  # Exit the block after the function call
-            return result
-        except SLRecursionError as re:
-            raise ParserError(f"Infinite recursion detected in function '{self.function.name}': {str(re)}", node=self)
+            return context.execute_function(self.function.name, self.arguments)
         except SLException as e:
-            context.exit_block()
             self.handle_error(e, context)
 
     def get_type(self, context):
@@ -142,7 +139,7 @@ class FunctionCallNode(ParserNode):
         if function_callable is None:
             raise FunctionNotFoundError(f"Function '{self.function.name}' not found")
 
-        # Match argument types with parameter types
+        # Match argument sl_types with parameter sl_types
         expected_types = [param.get_type(context) for param in function_callable.parameters]
         given_types = [arg.get_type(context) for arg in self.arguments]
 
@@ -186,20 +183,28 @@ class ReturnNode(ParserNode):
         This evaluates the expression of the return value and handles the control transfer back to the caller.
         """
         try:
-            context.enter_block(self.block_uuid)  # Enter the block for this return statement
+            with context.block_context(BlockType.RETURN, self.block_uuid):
+                return_value = self.value.evaluate(context) if self.value else None
 
-            # Evaluate the return value expression
-            if self.value is not None:
-                return_value = self.value.evaluate(context)
-                context.handle_return(return_value)
-                context.exit_block()  # Exit the block after evaluating the return value
-                raise ReturnException(return_value)  # Raise a signal to return the value
-            else:
-                context.handle_return(None)
-                context.exit_block()  # Exit the block even if there's no return value
-                return None
-        except ReturnException as re:
-            raise re  # Propagate the return signal to the caller
+                # Capture block info and stack trace
+                block_info = {
+                    'block_uuid': self.block_uuid,
+                    'node': self,
+                }
+
+                # Get the current stack trace from the context's call stack
+                stack_trace = context.get_call_stack_trace()
+
+                metadata = {
+                    'block_info': block_info,
+                    'stack_trace': stack_trace,
+                }
+
+                # Set the return signal in the control flow manager with metadata
+                context.control_flow.set_return(return_value, metadata=metadata)
+
+                # Return immediately since further evaluation in this function is unnecessary
+                return
         except SLException as e:
             self.handle_error(e, context)
 
@@ -266,7 +271,7 @@ class ApplyNode(ParserNode):
     def get_type(self, context):
         # This should reflect the return type of the function being applied
         func_type = self.function.get_type(context)
-        # Validate the argument types if the function specifies expected types
+        # Validate the argument sl_types if the function specifies expected sl_types
         expected_types = [param.get_type(context) for param in self.function.parameters]
         given_types = [arg.get_type(context) for arg in self.arguments]
         for expected, given in zip(expected_types, given_types):

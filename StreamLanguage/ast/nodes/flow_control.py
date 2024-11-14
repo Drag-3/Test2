@@ -4,59 +4,55 @@ from StreamLanguage.ast.nodes.base import ParserNode
 from StreamLanguage.ast.exceptions import ParserError
 from StreamLanguage.ast.block_types import BlockType
 from StreamLanguage.exceptions import SLException
+from StreamLanguage.interpreter.contextN import Context
 
 
 class IfNode(ParserNode):
     """
     A node that represents an if statement.
-    - `condition`: The condition to evaluate, which determines which branch to execute.
-    - `then_block`: The block of code to execute if the condition is true.
-    - `else_block`: The block of code to execute if the condition is false (optional).
     """
 
     BlockType = BlockType.IF
-    def __init__(self, condition, then_block, else_block=None):
+
+    def __init__(self, condition: ParserNode, then_block: list[ParserNode], else_block:list[ParserNode] | None = None):
         super().__init__('if')
         self.condition = condition
-        self.then_block_uuid = str(uuid.uuid4())  # Unique UUID for then_block
-        self.else_block_uuid = str(uuid.uuid4()) if else_block else None  # Unique UUID for else_block
+        self.then_block_uuid = str(uuid.uuid4())
+        self.else_block_uuid = str(uuid.uuid4()) if else_block else None
         self.then_block = then_block
         self.else_block = else_block
 
-    def children(self) -> list[ParserNode]:
-        # Flatten the lists and return all child nodes, including the else block if it exists
+    def children(self) -> list:
         children = [self.condition] + self.then_block
         if self.else_block:
             children += self.else_block
         return children
 
-    def evaluate(self, context):
+    def evaluate(self, context: Context):
         try:
-            return_val = None
             if self.condition.evaluate(context):
-                context.enter_block(self.then_block_uuid, BlockType.IF)
-                for node in self.then_block:
-                    return_val = node.evaluate(context)
-                context.exit_block()
+                with context.block_context(BlockType.IF, self.then_block_uuid):
+                    for node in self.then_block:
+                        node.evaluate(context)
+                        # Check for control flow signals
+                        if context.control_flow.should_return or context.control_flow.should_break or context.control_flow.should_continue:
+                            break  # Stop evaluating further nodes
             elif self.else_block:
-                context.enter_block(self.else_block_uuid, BlockType.ELSE)
-                for node in self.else_block:
-                    return_val = node.evaluate(context)
-                context.exit_block()
-            return return_val
+                with context.block_context(BlockType.IF, self.else_block_uuid):
+                    for node in self.else_block:
+                        node.evaluate(context)
+                        # Check for control flow signals
+                        if context.control_flow.should_return or context.control_flow.should_break or context.control_flow.should_continue:
+                            break  # Stop evaluating further nodes
+            # No need to return a value; control flow is managed via ControlFlowManager
         except SLException as e:
             self.handle_error(e, context)
 
-    def get_type(self, context):
-        """
-        The type of an if statement can be ambiguous if the branches return different types,
-        hence we check the types of both branches and raise an error if they don't match.
-        If the if statement doesn't return anything explicitly, it can be considered as having 'None' type.
-        """
+    def get_type(self, context: Context):
         try:
             then_type = self.then_block[0].get_type(context) if self.then_block else None
             else_type = self.else_block[0].get_type(context) if self.else_block else None
-            if else_type and then_type != else_type:
+            if then_type and else_type and then_type != else_type:
                 raise ParserError("Type mismatch between then and else branches", node=self)
             return then_type or else_type
         except SLException as e:
@@ -64,48 +60,52 @@ class IfNode(ParserNode):
 
     def handle_error(self, error, context):
         block_info = f" in then_block UUID {self.then_block_uuid}"
-        if self.else_block and context.get_current_block_uuid() == self.else_block_uuid:
+        if self.else_block and context.blocks_stack and context.blocks_stack[-1] == self.else_block_uuid:
             block_info = f" in else_block UUID {self.else_block_uuid}"
         error_message = f"Error{block_info}: {str(error)}"
         raise ParserError(error_message, node=self)
 
 
 
+
 class WhileNode(ParserNode):
     """
     A node that represents a while loop.
-    - `condition`: The condition to evaluate for each loop iteration.
-    - `body`: The block of code to execute as long as the condition is true.
     """
+
     BlockType = BlockType.LOOP
-    def __init__(self, condition, body):
+
+    def __init__(self, condition: ParserNode, body: list[ParserNode]):
         super().__init__('while')
         self.condition = condition
-        self.body_uuid = str(uuid.uuid4())  # Unique UUID for the loop body
-        self.body = body  # List of ParserNodes representing the loop body
+        self.body_uuid = str(uuid.uuid4())
+        self.body = body
 
     def children(self):
-        # Flatten and return both the condition and the body nodes
         return [self.condition] + self.body
 
     def evaluate(self, context):
-        """
-        Evaluate the while loop within the given context.
-        This method repeatedly evaluates the body as long as the condition evaluates to True.
-        """
         try:
-            context.enter_block(self.body_uuid, BlockType.LOOP)  # Enter the loop body block
-            while self.condition.evaluate(context):
-                for node in self.body:
-                    node.evaluate(context)
-            context.exit_block()  # Exit the loop body block
+            with context.block_context(BlockType.LOOP, self.body_uuid):
+                while self.condition.evaluate(context):
+                    for node in self.body:
+                        node.evaluate(context)
+                        # Check for control flow signals
+                        if context.control_flow.should_return:
+                            # Propagate the return signal upwards
+                            return
+                        if context.control_flow.should_break:
+                            # Reset the break signal and exit the loop
+                            context.control_flow.should_break = False
+                            return
+                        if context.control_flow.should_continue:
+                            # Reset the continue signal and proceed to next iteration
+                            context.control_flow.should_continue = False
+                            break  # Break out of body loop to re-evaluate condition
         except SLException as e:
             self.handle_error(e, context)
 
     def get_type(self, context):
-        """
-        The while loop will have None type as it doesn't return a value directly.
-        """
         try:
             condition_type = self.condition.get_type(context)
             if condition_type != bool:
@@ -120,45 +120,104 @@ class WhileNode(ParserNode):
         error_message = f"Error in while loop body UUID {self.body_uuid}: {str(error)}"
         raise ParserError(error_message, node=self)
 
+
 class ForNode(ParserNode):
+    """
+    A node that represents a for loop.
+    """
 
     BlockType = BlockType.LOOP
-    def __init__(self, initializer, condition, increment, body):
+
+    def __init__(self, initializer: ParserNode, condition: ParserNode, increment: ParserNode, body: list[ParserNode]):
         super().__init__('for')
-        self.initializer = initializer  # Typically an AssignmentNode or VariableDeclarationNode
-        self.condition = condition      # Expression node that evaluates to a boolean
-        self.increment = increment      # UpdateNode or similar for incrementing/decrementing
-        self.body_uuid = str(uuid.uuid4())  # Unique UUID for the loop body
-        self.body = body                # List of ParserNodes representing the loop body
+        self.initializer = initializer
+        self.condition = condition
+        self.increment = increment
+        self.body_uuid = str(uuid.uuid4())
+        self.body = body
 
     def children(self):
         return [self.initializer, self.condition, self.increment] + self.body
 
     def evaluate(self, context):
         try:
-            self.initializer.evaluate(context)
-            context.enter_loop(self.body_uuid, BlockType.LOOP)  # Enter the loop
-            while self.condition.evaluate(context):
-                for statement in self.body:
-                    statement.evaluate(context)
-                self.increment.evaluate(context)
-            context.exit_loop()  # Exit the loop
+            with context.block_context(BlockType.LOOP, self.body_uuid):
+                self.initializer.evaluate(context)
+                while self.condition.evaluate(context):
+                    for node in self.body:
+                        node.evaluate(context)
+                        # Check for control flow signals
+                        if context.control_flow.should_return:
+                            # Propagate the return signal upwards
+                            return
+                        if context.control_flow.should_break:
+                            # Reset the break signal and exit the loop
+                            context.control_flow.should_break = False
+                            return
+                        if context.control_flow.should_continue:
+                            # Reset the continue signal and proceed to increment and next iteration
+                            context.control_flow.should_continue = False
+                            break  # Break out to increment and re-evaluate condition
+                    self.increment.evaluate(context)
         except SLException as e:
             self.handle_error(e, context)
 
     def get_type(self, context):
         try:
-            initializer_type = self.initializer.get_type(context)
+            self.initializer.get_type(context)
             condition_type = self.condition.get_type(context)
             if condition_type != bool:
                 raise ParserError("For loop condition must be a boolean", node=self)
-            increment_type = self.increment.get_type(context)
+            self.increment.get_type(context)
             for node in self.body:
                 node.get_type(context)
-            return None  # For loop itself does not return a value
+            return None
         except SLException as e:
             self.handle_error(e, context)
 
     def handle_error(self, error, context):
         error_message = f"Error in for loop body UUID {self.body_uuid}: {str(error)}"
+        raise ParserError(error_message, node=self)
+
+
+class BreakNode(ParserNode):
+    """
+    A node that represents a break statement.
+    """
+
+    def __init__(self):
+        super().__init__('break')
+
+    def evaluate(self, context):
+        # Set the break signal in the control flow manager
+        context.control_flow.set_break()
+        # Return immediately
+        return
+
+    def get_type(self, context):
+        return None  # Break statements do not have a type
+
+    def handle_error(self, error, context):
+        error_message = f"Error in break statement: {str(error)}"
+        raise ParserError(error_message, node=self)
+
+class ContinueNode(ParserNode):
+    """
+    A node that represents a continue statement.
+    """
+
+    def __init__(self):
+        super().__init__('continue')
+
+    def evaluate(self, context):
+        # Set the continue signal in the control flow manager
+        context.control_flow.set_continue()
+        # Return immediately
+        return
+
+    def get_type(self, context):
+        return None  # Continue statements do not have a type
+
+    def handle_error(self, error, context):
+        error_message = f"Error in continue statement: {str(error)}"
         raise ParserError(error_message, node=self)
