@@ -1,4 +1,4 @@
-from StreamLanguage.ast.exceptions import ReturnException, SLTypeError
+from StreamLanguage.sl_ast.exceptions import ReturnException, SLTypeError
 from StreamLanguage.exceptions import SLException
 
 

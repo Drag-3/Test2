@@ -1,3 +1,4 @@
+from StreamLanguage.sl_ast.exceptions import SLTypeError
 from StreamLanguage.sl_types.data_instances.instance_base import SLInstanceType
 from StreamLanguage.sl_types.meta_type.meta_base import SLMetaType
 
@@ -10,7 +11,7 @@ class SLBoolean(SLInstanceType):
         elif isinstance(value, bool):
             self.value = value
         else:
-            raise TypeError("SLBoolean requires a boolean")
+            raise SLTypeError("SLBoolean requires a boolean")
 
     def to_slstring(self):
         from StreamLanguage.sl_types.data_instances.primatives.string import SLString

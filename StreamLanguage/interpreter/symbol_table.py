@@ -1,4 +1,4 @@
-from StreamLanguage.ast.exceptions import VariableNotDeclaredError, SLTypeError, VariableRedeclaredError
+from StreamLanguage.sl_ast.exceptions import VariableNotDeclaredError, SLTypeError, VariableRedeclaredError
 from StreamLanguage.interpreter.function_metadata import FunctionMetadata
 from StreamLanguage.sl_types.base import SLType
 

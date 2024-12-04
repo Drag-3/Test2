@@ -1,4 +1,4 @@
-from StreamLanguage.ast.block_types import BlockFlags
+from StreamLanguage.sl_ast.block_types import BlockFlags
 from StreamLanguage.interpreter.symbol_table import SymbolTable
 
 

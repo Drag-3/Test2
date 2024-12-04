@@ -1,9 +1,9 @@
 import uuid
 
-from StreamLanguage.ast.block_types import BlockType, BlockFlags
-from StreamLanguage.ast.nodes.base import ParserNode
-from StreamLanguage.ast.nodes.functions import ReturnNode
-from StreamLanguage.ast.exceptions import ReturnException, ParserError
+from StreamLanguage.sl_ast.block_types import BlockType, BlockFlags
+from StreamLanguage.sl_ast.nodes.base import ParserNode
+from StreamLanguage.sl_ast.nodes.functions import ReturnNode
+from StreamLanguage.sl_ast.exceptions import ReturnException, ParserError
 from StreamLanguage.exceptions import SLException
 
 

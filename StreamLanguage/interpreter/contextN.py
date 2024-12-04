@@ -1,9 +1,9 @@
 from contextlib import contextmanager
 
-from StreamLanguage.ast.block_types import BlockType, BlockFlags
-from StreamLanguage.ast.callables import CallableFunction
-from StreamLanguage.ast.exceptions import SLRecursionError, FunctionNotFoundError
-from StreamLanguage.ast.nodes.base import ParserNode
+from StreamLanguage.sl_ast.block_types import BlockType, BlockFlags
+from StreamLanguage.sl_ast.callables import CallableFunction
+from StreamLanguage.sl_ast.exceptions import SLRecursionError, FunctionNotFoundError
+from StreamLanguage.sl_ast.nodes.base import ParserNode
 from StreamLanguage.exceptions import SLException
 from StreamLanguage.interpreter.block import Block
 from StreamLanguage.interpreter.callframe import CallFrame
@@ -167,11 +167,36 @@ class Context:
         return trace
 
     def register_builtin_functions(self):
-        from StreamLanguage.builtins.functions import PrintFunction
+        from StreamLanguage.builtins.functions import PrintFunction, ReadIntFunction, ReadStringFunction, ReadDataFunction
         print_function = PrintFunction()
+        read_int_function = ReadIntFunction()
+        read_string_function = ReadStringFunction()
+        read_data_function = ReadDataFunction()
+
         self.declare_function(
             identifier='print',
             callable_object=print_function,
             parameters=print_function.parameters,
             return_type=print_function.return_type
+        )
+
+        self.declare_function(
+            identifier='read_int',
+            callable_object=read_int_function,
+            parameters=read_int_function.parameters,
+            return_type=read_int_function.return_type
+        )
+
+        self.declare_function(
+            identifier='read_string',
+            callable_object=read_string_function,
+            parameters=read_string_function.parameters,
+            return_type=read_string_function.return_type
+        )
+
+        self.declare_function(
+            identifier='read_data',
+            callable_object=read_data_function,
+            parameters=read_data_function.parameters,
+            return_type=read_data_function.return_type
         )

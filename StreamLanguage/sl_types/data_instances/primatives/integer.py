@@ -1,3 +1,4 @@
+from StreamLanguage.sl_ast.exceptions import SLTypeError
 from StreamLanguage.sl_types.base import SLType
 from StreamLanguage.sl_types.data_instances.instance_base import SLInstanceType
 from StreamLanguage.sl_types.meta_type.meta_base import SLMetaType
@@ -16,7 +17,7 @@ class SLInteger(SLInstanceType):
             if isinstance(value, SLFloat):
                 self.value = int(value.value)  # Convert SLFloat to SLInteger
             else:
-                raise TypeError("SLInteger requires an integer, SLInteger, or SLFloat")
+                raise SLTypeError("SLInteger requires an integer, SLInteger, or SLFloat")
 
     def to_slstring(self):
         from StreamLanguage.sl_types.data_instances.primatives.string import SLString
@@ -67,6 +68,14 @@ class SLInteger(SLInstanceType):
             return SLInteger(self.value // other.value)
         if isinstance(other, SLFloat):
             return SLFloat(self.value // other.value)
+        return NotImplemented
+
+    def __mod__(self, other):
+        from StreamLanguage.sl_types.data_instances.primatives.float import SLFloat
+        if isinstance(other, SLInteger):
+            return SLInteger(self.value % other.value)
+        if isinstance(other, SLFloat):
+            return SLFloat(self.value % other.value)
         return NotImplemented
 
     def __eq__(self, other):

@@ -1,14 +1,14 @@
 from importlib.metadata import metadata
 
-from StreamLanguage.ast.nodes.base import ParserNode
-from StreamLanguage.ast.nodes.expressions import IdentifierNode
-from StreamLanguage.ast.nodes.flow_control import IfNode
-from StreamLanguage.ast.exceptions import ParserError, FunctionNotFoundError, SLRecursionError, ReturnException, SLTypeError
+from StreamLanguage.sl_ast.nodes.base import ParserNode
+from StreamLanguage.sl_ast.nodes.expressions import IdentifierNode
+from StreamLanguage.sl_ast.nodes.flow_control import IfNode
+from StreamLanguage.sl_ast.exceptions import ParserError, FunctionNotFoundError, SLRecursionError, ReturnException, SLTypeError
 from StreamLanguage.exceptions import SLException
 from StreamLanguage.interpreter.contextN import Context
 from StreamLanguage.interpreter.symbol_table import SymbolTableEntry
-from StreamLanguage.ast.callables import CallableFunction
-from StreamLanguage.ast.block_types import BlockType
+from StreamLanguage.sl_ast.callables import CallableFunction
+from StreamLanguage.sl_ast.block_types import BlockType
 import uuid
 
 

@@ -1,13 +1,13 @@
 import unittest
 
 from StreamLanguage.interpreter.contextN import Context
-from StreamLanguage.ast.exceptions import SLValueError
-from StreamLanguage.ast.nodes.error_handling import TryCatchNode
-from StreamLanguage.ast.nodes.expressions import IdentifierNode, AssignmentNode, BinaryOperationNode, UnaryOperationNode
-from StreamLanguage.ast.nodes.flow_control import IfNode
-from StreamLanguage.ast.nodes.functions import ReturnNode, FunctionNode, FunctionCallNode, LambdaNode, ApplyNode
-from StreamLanguage.ast.nodes.structure import VariableDeclarationNode
-from StreamLanguage.ast.nodes.node_types import PrimitiveIntNode, PrimitiveStringNode, ArrayNode
+from StreamLanguage.sl_ast.exceptions import SLValueError
+from StreamLanguage.sl_ast.nodes.error_handling import TryCatchNode
+from StreamLanguage.sl_ast.nodes.expressions import IdentifierNode, AssignmentNode, BinaryOperationNode, UnaryOperationNode
+from StreamLanguage.sl_ast.nodes.flow_control import IfNode
+from StreamLanguage.sl_ast.nodes.functions import ReturnNode, FunctionNode, FunctionCallNode, LambdaNode, ApplyNode
+from StreamLanguage.sl_ast.nodes.structure import VariableDeclarationNode
+from StreamLanguage.sl_ast.nodes.node_types import PrimitiveIntNode, PrimitiveStringNode, ArrayNode
 from StreamLanguage.type_system import init_type_system, init_exception_types
 from StreamLanguage.sl_types.data_instances.collections.array import SLArray
 from StreamLanguage.sl_types.data_instances.primatives.float import SLFloat

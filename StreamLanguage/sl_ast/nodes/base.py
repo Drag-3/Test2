@@ -1,5 +1,5 @@
 import uuid
-from StreamLanguage.ast.exceptions import ParserError
+from StreamLanguage.sl_ast.exceptions import ParserError
 
 class ParserNode:
     def __init__(self, token, block_uuid=None):

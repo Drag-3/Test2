@@ -1,7 +1,7 @@
 from StreamLanguage.interpreter.contextN import Context
 from StreamLanguage.interpreter.symbol_table import SymbolTableEntry
-from StreamLanguage.ast.nodes.base import ParserNode
-from StreamLanguage.ast.exceptions import ParserError, SLTypeError, VariableNotDeclaredError, SLValueError
+from StreamLanguage.sl_ast.nodes.base import ParserNode
+from StreamLanguage.sl_ast.exceptions import ParserError, SLTypeError, VariableNotDeclaredError, SLValueError
 from StreamLanguage.exceptions import SLException
 from StreamLanguage.sl_types.base import SLType
 from StreamLanguage.sl_types.data_instances.primatives.exception import SLExceptionInstance
@@ -195,11 +195,27 @@ class BinaryOperationNode(ParserNode):
             else:
                 return a / b
 
+        def mod(a, b):
+            """
+            Perform modulus operation
+            :param a:
+            :param b:
+            :return:
+            """
+            if b == 0:
+                exception_instance = SLExceptionInstance(value_error_type, "Division by zero")
+                # Set the exception in the control flow manager
+                context.control_flow.set_exception(exception_instance)
+                return None
+            else:
+                return a % b
+
         operation_methods = {
             '+': lambda x, y: x + y,
             '-': lambda x, y: x - y,
             '*': lambda x, y: x * y,
             '/': division,
+            '%': mod,
             '<': lambda x, y: x < y,
             '>': lambda x, y: x > y,
             '==': lambda x, y: x == y,

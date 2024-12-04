@@ -1,6 +1,6 @@
-from StreamLanguage.ast.nodes.base import ParserNode
-from StreamLanguage.ast.exceptions import ParserError, VariableRedeclaredError, SLTypeError
-from StreamLanguage.ast.block_types import BlockType
+from StreamLanguage.sl_ast.nodes.base import ParserNode
+from StreamLanguage.sl_ast.exceptions import ParserError, VariableRedeclaredError, SLTypeError
+from StreamLanguage.sl_ast.block_types import BlockType
 from StreamLanguage.exceptions import SLException
 from StreamLanguage.interpreter.contextN import Context
 from StreamLanguage.sl_types.base import SLType

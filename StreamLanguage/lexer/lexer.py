@@ -4,11 +4,11 @@ class Lexer:
 
     DATA_TYPES = ('INT', 'FLOAT', 'STRING', 'STREAM', 'EVENT')
     DATA_TYPE_IDENTIFIERS = ('SINT', 'SFLOAT', 'SSTRING', 'SEVENT', 'SSTREAM', 'SBOOL')
-    OPERATORS = ('PLUS', 'MINUS', 'MULTIPLY', 'DIVIDE', 'EQUALS', 'GT', 'LT', 'GE', 'LE', 'AND', 'OR', 'NOT', 'NE')
+    OPERATORS = ('PLUS', 'MINUS', 'MULTIPLY', 'DIVIDE','MODULUS', 'EQUALS', 'GT', 'LT', 'GE', 'LE', 'AND', 'OR', 'NOT', 'NE')
 
     SPECIFIC_OPERATORS = ('TO_STREAM', 'CHAIN', 'ATTACH', 'CALL', 'FILTEROP', 'MAP', 'REDUCE', 'LAMBDA',
                           'STREAMSPLIT', 'STREAMMERGE', 'FEEDBACK', 'ASSIGN')
-    KEYWORDS = ('FN', 'IF', 'ELSE', 'FOR', 'WHILE', 'RETURN', 'TRUE', 'FALSE', 'VAR', 'CONST')
+    KEYWORDS = ('FN', 'IF', 'ELSE', 'FOR', 'WHILE', 'RETURN', 'TRUE', 'FALSE', 'VAR', 'CONST', 'BREAK', 'CONTINUE')
 
     STRUCTURE = ('LPAREN', 'RPAREN', 'LBRACE', 'RBRACE', 'COMMA',
                     'SEMICOLON', 'TYPEHINTCOLON', 'NEWLINE', 'LBRACKET', 'RBRACKET')
@@ -51,6 +51,7 @@ class Lexer:
     t_MINUS   = r'-'
     t_MULTIPLY = r'\*'
     t_DIVIDE  = r'/'
+    t_MODULUS = r'%'
     t_EQUALS  = r'=='
     t_NE      = r'!='
     t_GT      = r'>'
@@ -78,6 +79,8 @@ class Lexer:
     t_FALSE     = r'false'
     t_STREAM    = r'stream'
     t_EVENT     = r'event'
+    t_BREAK     = r'break'
+    t_CONTINUE  = r'continue'
     t_TO_STREAM = r'\.toStream\(\)'
     t_CHAIN     = r'>>'
     t_ATTACH    = r'->'

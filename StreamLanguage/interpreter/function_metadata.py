@@ -1,4 +1,4 @@
-from StreamLanguage.ast.exceptions import VariableRedeclaredError, FunctionNotFoundError
+from StreamLanguage.sl_ast.exceptions import VariableRedeclaredError, FunctionNotFoundError
 
 
 class FunctionOverload:

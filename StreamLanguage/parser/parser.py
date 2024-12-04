@@ -1,12 +1,13 @@
 import ply.yacc as yacc
 
-from StreamLanguage.ast.nodes.flow_control import IfNode, WhileNode, ForNode, BreakNode, ContinueNode
-from StreamLanguage.ast.nodes.base import ParserNode
-from StreamLanguage.ast.nodes.expressions import IdentifierNode, BinaryOperationNode, UnaryOperationNode
-from StreamLanguage.ast.nodes.functions import FunctionCallNode, FunctionNode, ReturnNode
-from StreamLanguage.ast.nodes.node_types import PrimitiveDataNode, PrimitiveBoolNode, PrimitiveIntNode, \
+from StreamLanguage.sl_ast.nodes.flow_control import IfNode, WhileNode, ForNode, BreakNode, ContinueNode
+from StreamLanguage.sl_ast.nodes.base import ParserNode
+from StreamLanguage.sl_ast.nodes.expressions import IdentifierNode, BinaryOperationNode, UnaryOperationNode, \
+    AssignmentNode
+from StreamLanguage.sl_ast.nodes.functions import FunctionCallNode, FunctionNode, ReturnNode
+from StreamLanguage.sl_ast.nodes.node_types import PrimitiveDataNode, PrimitiveBoolNode, PrimitiveIntNode, \
     PrimitiveFloatNode, PrimitiveStringNode
-from StreamLanguage.ast.nodes.structure import ProgramNode, VariableDeclarationNode
+from StreamLanguage.sl_ast.nodes.structure import ProgramNode, VariableDeclarationNode
 from StreamLanguage.sl_types.data_instances.primatives.boolean import SLBoolean
 from StreamLanguage.sl_types.data_instances.primatives.float import SLFloat
 from StreamLanguage.sl_types.data_instances.primatives.integer import SLInteger
@@ -29,7 +30,7 @@ class Parser:
         ('left', 'AND'),            # '&&'
         ('nonassoc', 'EQUALS', 'NE', 'GT', 'LT', 'GE', 'LE'),
         ('left', 'PLUS', 'MINUS'),
-        ('left', 'MULTIPLY', 'DIVIDE'),
+        ('left', 'MULTIPLY', 'DIVIDE', 'MODULUS'),
         ('right', 'NOT'),
         ('right', 'UMINUS', 'UPLUS'),
     )
@@ -245,6 +246,7 @@ class Parser:
                       | expression MULTIPLY expression
                       | expression DIVIDE expression
                       | expression EQUALS expression
+                      | expression MODULUS expression
                       | expression NE expression
                       | expression GT expression
                       | expression LT expression
@@ -276,7 +278,9 @@ class Parser:
 
     def p_control_flow(self, p):
         '''control_flow : conditional
-                        | loop'''
+                        | loop
+                        | break
+                        | continue'''
         p[0] = p[1]
 
     def p_expression_group(self, p):
@@ -337,14 +341,22 @@ class Parser:
     def p_loop(self, p):
         '''loop : FOR LPAREN declaration SEMICOLON expression SEMICOLON expression RPAREN block_statement
                 | WHILE LPAREN expression RPAREN block_statement'''
-        if len(p) == 8:  # while loop
+        if len(p) == 6:  # while loop
             p[0] = WhileNode(p[3], p[5])  # condition, body
         else:  # for loop
             p[0] = ForNode(p[3], p[5], p[7], p[9])  # initializer, condition, increment, body
 
+    def p_break(self, p):
+        '''break : BREAK SEMICOLON'''
+        p[0] = BreakNode()
+
+    def p_continue(self, p):
+        '''continue : CONTINUE SEMICOLON'''
+        p[0] = ContinueNode()
+
     def p_assignment(self, p):
         '''assignment : IDENTIFIER ASSIGN expression'''
-        p[0] = ('assignment', p[1], p[3])  # variable, expression
+        p[0] = AssignmentNode(IdentifierNode(p[1]), p[3])
 
 
 

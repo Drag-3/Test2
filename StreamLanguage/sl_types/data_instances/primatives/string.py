@@ -1,3 +1,4 @@
+from StreamLanguage.sl_ast.exceptions import SLTypeError
 from StreamLanguage.sl_types.data_instances.instance_base import SLInstanceType
 from StreamLanguage.sl_types.meta_type.meta_base import SLMetaType
 
@@ -10,7 +11,7 @@ class SLString(SLInstanceType):
         elif isinstance(value, str):
             self.value = value
         else:
-            raise TypeError("SLString requires a string")
+            raise SLTypeError("SLString requires a string")
 
     def to_slstring(self):
         return self

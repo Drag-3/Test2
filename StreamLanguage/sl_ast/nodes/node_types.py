@@ -1,5 +1,5 @@
-from StreamLanguage.ast.nodes.base import ParserNode
-from StreamLanguage.ast.exceptions import ParserError
+from StreamLanguage.sl_ast.nodes.base import ParserNode
+from StreamLanguage.sl_ast.exceptions import ParserError
 from StreamLanguage.exceptions import SLException
 from StreamLanguage.sl_types.data_instances.collections.array import SLArray
 from StreamLanguage.sl_types.meta_type.collections.array_type import SLArrayType
