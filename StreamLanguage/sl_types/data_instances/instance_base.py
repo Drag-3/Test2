@@ -12,5 +12,8 @@ class SLInstanceType(SLType):
     def __str__(self):
         return str(self.value)
 
+    def __repr__(self):
+        return str(self)
+
     def to_python_type(self):
         return self.value

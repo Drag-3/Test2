@@ -16,11 +16,11 @@ from StreamLanguage.sl_types.data_instances.instance_base import SLInstanceType
 class Context:
     def __init__(self, parent=None, context_type=None):
         self.MAX_RECURSION_DEPTH = 1000
+        self.MAX_FUNCTION_RECURSION_DEPTH = 750
         self.parent = parent
         self.context_type = context_type or 'generic'
         self.global_symbol_table = SymbolTable()
         self.current_symbol_table = self.global_symbol_table
-        # Other attributes remain the same
         self.blocks_stack = []  # Stack to manage block UUIDs
         self.recursion_depth = {}
         self.control_flow = ControlFlowManager()
@@ -111,9 +111,13 @@ class Context:
         function_name = function_callable.name
 
         # Check recursion limits
+        total_recursion_depth = len(self.call_stack)
+        if total_recursion_depth > self.MAX_RECURSION_DEPTH:
+            raise SLRecursionError(f"Exceeded maximum recursion depth in function '{function_name}'")
+
         if function_name in self.recursion_depth:
             self.recursion_depth[function_name] += 1
-            if self.recursion_depth[function_name] > self.MAX_RECURSION_DEPTH:
+            if self.recursion_depth[function_name] > self.MAX_FUNCTION_RECURSION_DEPTH:
                 raise SLRecursionError(f"Exceeded maximum recursion depth in function '{function_name}'")
         else:
             self.recursion_depth[function_name] = 1
@@ -131,6 +135,7 @@ class Context:
         # Push a detailed call frame onto the call stack
         call_frame = CallFrame(function_name, arguments, self.current_symbol_table)
         self.call_stack.append(call_frame)
+        print(call_frame, self.recursion_depth[function_name])
 
     def exit_function_call(self):
         # Pop the call frame and restore the previous symbol table

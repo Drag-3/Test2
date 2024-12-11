@@ -12,7 +12,5 @@ def main_test():
     print(result)
 
 
-
-
 if __name__ == "__main__":
     main_test()

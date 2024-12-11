@@ -7,9 +7,11 @@ class SymbolTableEntry:
     def __init__(self, identifier, t=None, value=None, is_constant=False, scope_level=None, is_global=False, is_nonlocal=False):
         self.identifier = identifier  # The name of the variable or symbol
         self.type = t  # The type of the symbol (optional)
-        self.value = value  # The value associated with the symbol (optional)
+        self.value = value  # The value associated with the symbol (optional)  // Never set if nonlocal
         self.scope_level = scope_level  # The scope level at which the symbol was declared
         self.is_constant = is_constant
+        self.non_local = is_nonlocal
+        self.global_scope = is_global
 
     def __repr__(self):
         return f"SymbolTableEntry(identifier={self.identifier}, type={self.type}, value={self.value}, scope_level={self.scope_level}, is_constant={self.is_constant})"

@@ -1,3 +1,6 @@
+from StreamLanguage.sl_ast.exceptions import SLTypeError
+
+
 class TypeRegistry:
     """
     A global registry for managing type conversions and custom SLType registrations.
@@ -37,14 +40,14 @@ class TypeRegistry:
         return cls._type_registry.get(meta_type)
 
     @classmethod
-    def convert(cls, from_instance, to_meta_type):
+    def convert(cls, from_instance, to_meta_type):  # I don't atually use this yet, as currently using the conversion functions directly in dunder methods.
         """
         Convert one instance type to another using the registered conversion function.
         """
         conversion_func = cls._conversion_registry.get((type(from_instance), to_meta_type))
         if conversion_func:
             return conversion_func(from_instance)
-        raise TypeError(f"Cannot convert {from_instance} to {to_meta_type}")
+        raise SLTypeError(f"Cannot convert {from_instance} to {to_meta_type}")
 
     @classmethod
     def get_constructor(cls, type_name):
@@ -61,7 +64,7 @@ class TypeRegistry:
         constructor = cls.get_constructor(type_name)
         if constructor:
             return constructor(*args)
-        raise TypeError(f"No constructor found for type '{type_name}'")
+        raise SLTypeError(f"No constructor found for type '{type_name}'")
 
     @classmethod
     def get_meta_type_by_name(cls, name):

@@ -1,5 +1,5 @@
 # builtins.py
-from StreamLanguage.sl_ast.callables import Callable
+from StreamLanguage.sl_ast.callables import Callable, function_call_context
 from StreamLanguage.sl_ast.exceptions import SLTypeError
 from StreamLanguage.sl_ast.nodes.expressions import IdentifierNode
 from StreamLanguage.exceptions import SLException
@@ -10,7 +10,6 @@ from StreamLanguage.sl_types.data_instances.primatives.string import SLString
 from StreamLanguage.sl_types.meta_type.meta_base import SLMetaType
 from StreamLanguage.sl_types.meta_type.primatives.integer_type import SLIntegerType
 from StreamLanguage.sl_types.meta_type.primatives.string_type import SLStringType
-
 
 class PrintFunction(Callable):
     def __init__(self):
@@ -34,11 +33,12 @@ class PrintFunction(Callable):
         :param context: The current execution context.
         :return: None
         """
-        try:
-            print(data)
-            return None
-        except Exception as e:
-            raise SLException(f"Error in print function: {str(e)}")
+        with function_call_context(context, self, [data]):
+            try:
+                print(data)
+                return None
+            except Exception as e:
+                raise SLException(f"Error in print function: {str(e)}")
 
 
 class ReadIntFunction(Callable):
@@ -59,14 +59,15 @@ class ReadIntFunction(Callable):
         :param context: The current execution context.
         :return: The integer read from input.
         """
-        try:
-            user_input = input()
-            value = SLInteger(int(user_input))
-            return value
-        except ValueError:
-            raise SLTypeError(f"Invalid integer input: '{user_input}'")
-        except Exception as e:
-            raise SLException(f"Error in read_int function: {str(e)}")
+        with function_call_context(context, self, []):
+            try:
+                user_input = input()
+                value = SLInteger(int(user_input))
+                return value
+            except ValueError:
+                raise SLTypeError(f"Invalid integer input: '{user_input}'")
+            except Exception as e:
+                raise SLException(f"Error in read_int function: {str(e)}")
 
 
 class ReadStringFunction(Callable):
@@ -87,11 +88,12 @@ class ReadStringFunction(Callable):
         :param context: The current execution context.
         :return: The string read from input.
         """
-        try:
-            user_input = SLString(input())
-            return user_input
-        except Exception as e:
-            raise SLException(f"Error in read_string function: {str(e)}")
+        with function_call_context(context, self, []):
+            try:
+                user_input = SLString(input())
+                return user_input
+            except Exception as e:
+                raise SLException(f"Error in read_string function: {str(e)}")
 
 
 # builtins.py (continued)
@@ -114,27 +116,28 @@ class ReadDataFunction(Callable):
         :param context: The current execution context.
         :return: The data read from input with appropriate type.
         """
-        try:
-            user_input = input().strip()
-
-            # Try to parse as integer
+        with function_call_context(context, self, []):
             try:
-                return SLInteger(int(user_input))
-            except ValueError:
-                pass
+                user_input = input().strip()
 
-            # Try to parse as float
-            try:
-                return SLFloat(float(user_input))
-            except ValueError:
-                pass
+                # Try to parse as integer
+                try:
+                    return SLInteger(int(user_input))
+                except ValueError:
+                    pass
 
-            # Check for boolean
-            if user_input.lower() in ['true', 'false']:
-                return SLBoolean(user_input.lower() == 'true')
+                # Try to parse as float
+                try:
+                    return SLFloat(float(user_input))
+                except ValueError:
+                    pass
 
-            # Default to string
-            return SLString(user_input)
+                # Check for boolean
+                if user_input.lower() in ['true', 'false']:
+                    return SLBoolean(user_input.lower() == 'true')
 
-        except Exception as e:
-            raise SLException(f"Error in read_data function: {str(e)}")
+                # Default to string
+                return SLString(user_input)
+
+            except Exception as e:
+                raise SLException(f"Error in read_data function: {str(e)}")

@@ -10,7 +10,7 @@ fn fibonacci(n){
 
 fn main() {
 
-    var position = 22; // Change this value to calculate a different Fibonacci number
+    var position = 100; // Change this value to calculate a different Fibonacci number
     var fib_number = fibonacci(position);
     print("Fibonacci number at position " + position + " is " + fib_number);
 }

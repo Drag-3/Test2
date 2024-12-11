@@ -1,25 +1,7 @@
 from ply import lex
 
+
 class Lexer:
-
-    DATA_TYPES = ('INT', 'FLOAT', 'STRING', 'STREAM', 'EVENT')
-    DATA_TYPE_IDENTIFIERS = ('SINT', 'SFLOAT', 'SSTRING', 'SEVENT', 'SSTREAM', 'SBOOL')
-    OPERATORS = ('PLUS', 'MINUS', 'MULTIPLY', 'DIVIDE','MODULUS', 'EQUALS', 'GT', 'LT', 'GE', 'LE', 'AND', 'OR', 'NOT', 'NE')
-
-    SPECIFIC_OPERATORS = ('TO_STREAM', 'CHAIN', 'ATTACH', 'CALL', 'FILTEROP', 'MAP', 'REDUCE', 'LAMBDA',
-                          'STREAMSPLIT', 'STREAMMERGE', 'FEEDBACK', 'ASSIGN')
-    KEYWORDS = ('FN', 'IF', 'ELSE', 'FOR', 'WHILE', 'RETURN', 'TRUE', 'FALSE', 'VAR', 'CONST', 'BREAK', 'CONTINUE')
-
-    STRUCTURE = ('LPAREN', 'RPAREN', 'LBRACE', 'RBRACE', 'COMMA',
-                    'SEMICOLON', 'TYPEHINTCOLON', 'NEWLINE', 'LBRACKET', 'RBRACKET')
-
-    tokens = DATA_TYPES + DATA_TYPE_IDENTIFIERS + OPERATORS + SPECIFIC_OPERATORS + KEYWORDS + STRUCTURE + ('IDENTIFIER','EOF')
-
-    states = (
-        ('MULTILINECOMMENT', 'exclusive'),
-        ('COMMENT', 'exclusive'),
-    )
-
     # Reserved words mapping
     reserved = {
         'fn': 'FN',
@@ -30,8 +12,8 @@ class Lexer:
         'return': 'RETURN',
         'true': 'TRUE',
         'false': 'FALSE',
-        'stream': 'STREAM',
-        'event': 'EVENT',
+        r'<stream>': 'STREAM',
+        r'<event>': 'EVENT',
         'var': 'VAR',
         'const': 'CONST',
         'int': 'SINT',
@@ -40,53 +22,57 @@ class Lexer:
         'event': 'SEVENT',
         'stream': 'SSTREAM',
         'boolean': 'SBOOL',
+        'break': 'BREAK',
+        'continue': 'CONTINUE',
         # Add other reserved words here
     }
 
-    # Define operator precedence and associativity
+    DATA_TYPES = ('INT', 'FLOAT', 'STRING')
+    RESERVED = tuple(reserved.values())
+    OPERATORS = (
+        'PLUS', 'MINUS', 'MULTIPLY', 'DIVIDE', 'MODULUS', 'EQUALS', 'GT', 'LT', 'GE', 'LE', 'AND', 'OR', 'NOT', 'NE')
 
+    SPECIFIC_OPERATORS = ('TO_STREAM', 'CHAIN', 'ATTACH', 'CALL', 'FILTEROP', 'MAP', 'REDUCE', 'LAMBDA',
+                          'STREAMSPLIT', 'STREAMMERGE', 'FEEDBACK', 'ASSIGN')
 
+    STRUCTURE = ('LPAREN', 'RPAREN', 'LBRACE', 'RBRACE', 'COMMA',
+                 'SEMICOLON', 'TYPEHINTCOLON', 'NEWLINE', 'LBRACKET', 'RBRACKET')
 
-    t_PLUS    = r'\+'
-    t_MINUS   = r'-'
+    tokens = DATA_TYPES + RESERVED + OPERATORS + SPECIFIC_OPERATORS + STRUCTURE + ('IDENTIFIER', 'EOF')
+
+    states = (
+        ('MULTILINECOMMENT', 'exclusive'),
+        ('COMMENT', 'exclusive'),
+    )
+
+    t_PLUS = r'\+'
+    t_MINUS = r'-'
     t_MULTIPLY = r'\*'
-    t_DIVIDE  = r'/'
+    t_DIVIDE = r'/'
     t_MODULUS = r'%'
-    t_EQUALS  = r'=='
-    t_NE      = r'!='
-    t_GT      = r'>'
-    t_LT      = r'<'
-    t_GE      = r'>='
-    t_LE      = r'<='
-    t_AND     = r'&&'
-    t_OR      = r'\|\|'
-    t_NOT     = r'!'
-    t_LPAREN  = r'\('
-    t_RPAREN  = r'\)'
-    t_LBRACE  = r'\{'
-    t_RBRACE  = r'\}'
+    t_EQUALS = r'=='
+    t_NE = r'!='
+    t_GT = r'>'
+    t_LT = r'<'
+    t_GE = r'>='
+    t_LE = r'<='
+    t_AND = r'&&'
+    t_OR = r'\|\|'
+    t_NOT = r'!'
+    t_LPAREN = r'\('
+    t_RPAREN = r'\)'
+    t_LBRACE = r'\{'
+    t_RBRACE = r'\}'
     t_LBRACKET = r'\['
     t_RBRACKET = r'\]'
-    t_COMMA   = r','
+    t_COMMA = r','
     t_SEMICOLON = r';'
-    t_FN        = r'fn'
-    t_IF        = r'if'
-    t_ELSE      = r'else'
-    t_FOR       = r'for'
-    t_WHILE     = r'while'
-    t_RETURN    = r'return'
-    t_TRUE      = r'true'
-    t_FALSE     = r'false'
-    t_STREAM    = r'stream'
-    t_EVENT     = r'event'
-    t_BREAK     = r'break'
-    t_CONTINUE  = r'continue'
     t_TO_STREAM = r'\.toStream\(\)'
-    t_CHAIN     = r'>>'
-    t_ATTACH    = r'->'
+    t_CHAIN = r'>>'
+    t_ATTACH = r'->'
     t_TYPEHINTCOLON = r':'
-    t_NEWLINE   = r'\n'
-    t_CALL   = r'\.'
+    t_NEWLINE = r'\n'
+    t_CALL = r'\.'
     t_FILTEROP = r'\?'
     t_MAP = r'\$'
     t_LAMBDA = r'=>'
@@ -94,19 +80,10 @@ class Lexer:
     t_STREAMSPLIT = r'\|'
     t_STREAMMERGE = r'\+\+'
     t_FEEDBACK = r'<<'
-    t_VAR = r'var'
-    t_CONST = r'const'
     t_ASSIGN = r'='
 
-    t_SINT = r'int'
-    t_SFLOAT = r'float'
-    t_SSTRING = r'string'
-    t_SEVENT = r'event'
-    t_SSTREAM = r'stream'
-    t_SBOOL = r'boolean'
-
     def t_STRING(self, t):
-        r'\"[^\"]*\"' # Match a sequence of characters enclosed in double quotes TODO: escape sequences
+        r'\"[^\"]*\"'  # Match a sequence of characters enclosed in double quotes TODO: escape sequences (Use a state with special characters)
         t.value = t.value[1:-1]
         return t
 
@@ -120,10 +97,9 @@ class Lexer:
         t.value = int(t.value)
         return t
 
-
     def t_IDENTIFIER(self, t):
         r'[a-zA-Z_][a-zA-Z0-9_]*'  # Match a sequence of letters, digits, and underscores not starting with a digit
-        t.type = self.reserved.get(t.value, 'IDENTIFIER')
+        t.type = self.reserved.get(t.value, 'IDENTIFIER')  # Set Type to a Reserved value, else default to identifier
         return t
 
     def t_COMMENT(self, t):
@@ -134,14 +110,14 @@ class Lexer:
         t.lexer.skip(1)
 
     t_COMMENT_ignore = ' \t'
+
     def t_COMMENT_end(self, t):
         r'\n'  # Match a newline character
         t.lexer.begin('INITIAL')  # Return to the initial state
 
-    def t_newline(self, t): #Track line numbers
+    def t_newline(self, t):  #Track line numbers
         r'\n+'
         t.lexer.lineno += len(t.value)
-
 
     def t_MULTILINECOMMENT(self, t):
         r'/\*'  # Match a sequence of characters starting with /*
@@ -161,7 +137,7 @@ class Lexer:
         t.lexer.begin('INITIAL')  # Return to the initial state
 
     # A string containing ignored characters (spaces and tabs)
-    t_ignore  = ' \t'
+    t_ignore = ' \t'
 
     # Error handling rule
     def t_error(self, t):
@@ -274,4 +250,3 @@ if __name__ == '__main__':
     for token in tokens:
         print(token)
     print("Done")
-

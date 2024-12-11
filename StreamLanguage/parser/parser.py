@@ -16,23 +16,21 @@ from StreamLanguage.sl_types.type_registry import TypeRegistry
 from StreamLanguage.lexer.lexer import Lexer
 
 
-
-
 class Parser:
-
     tokens = Lexer.tokens
-    precedence = (  # This needed to be defined in this and NOT in the lexer This caused so many problems that a simple google search could have fixed...
-        ('left', 'FEEDBACK'),       # '<<'
-        ('left', 'STREAMMERGE'),    # '++'
-        ('left', 'CHAIN'),          # '>>'
-        ('left', 'STREAMSPLIT'),    # '|'
-        ('left', 'OR'),             # '||'
-        ('left', 'AND'),            # '&&'
+    precedence = (
+    # This needed to be defined in this and NOT in the lexer This caused so many problems that a simple google search could have fixed...
+        ('left', 'FEEDBACK'),  # '<<'  # Least Precedence
+        ('left', 'STREAMMERGE'),  # '++'
+        ('left', 'CHAIN'),  # '>>'
+        ('left', 'STREAMSPLIT'),  # '|'
+        ('left', 'OR'),  # '||'
+        ('left', 'AND'),  # '&&'
         ('nonassoc', 'EQUALS', 'NE', 'GT', 'LT', 'GE', 'LE'),
         ('left', 'PLUS', 'MINUS'),
         ('left', 'MULTIPLY', 'DIVIDE', 'MODULUS'),
         ('right', 'NOT'),
-        ('right', 'UMINUS', 'UPLUS'),
+        ('right', 'UMINUS', 'UPLUS'),  # Most Precedence
     )
 
     # Comments are handled in the lexer, so they're not part of the parser rules.
@@ -52,7 +50,6 @@ class Parser:
                     | assignment SEMICOLON'''
         p[0] = p[1]  # declaration
 
-
     def p_statement_list(self, p):
         '''statement_list : statement
                           | statement_list statement'''
@@ -61,13 +58,9 @@ class Parser:
         else:  # multiple statements
             p[0] = p[1] + [p[2]]  # Append the new statement to the list
 
-
-
     def p_function_call(self, p):
         '''function_call : IDENTIFIER LPAREN opt_arg_list RPAREN'''
         p[0] = FunctionCallNode(IdentifierNode(p[1]), p[3])
-
-
 
     def p_opt_arg_list(self, p):
         '''opt_arg_list : arg_list
@@ -77,7 +70,6 @@ class Parser:
         else:
             p[0] = p[1]  # list of arguments or None
 
-
     def p_arg_list(self, p):
         '''arg_list : expression
                     | arg_list COMMA expression'''
@@ -85,7 +77,6 @@ class Parser:
             p[0] = [p[1]]
         else:  # multiple arguments
             p[0] = p[1] + [p[3]]  # append new argument
-
 
     # Function Definitions
     def p_function_definition(self, p):
@@ -108,7 +99,6 @@ class Parser:
             body = p[7]
             p[0] = FunctionNode(function_name, parameters, body, return_type=return_type)
 
-
     def p_return_statement(self, p):
         '''return_statement : RETURN expression'''
         p[0] = ReturnNode(p[2])  # return statement
@@ -116,7 +106,6 @@ class Parser:
     def p_block_statement(self, p):
         '''block_statement : LBRACE statement_list RBRACE'''
         p[0] = p[2]  # statements
-
 
     def p_lambda_function(self, p):
         '''lambda_function : FN LPAREN opt_param_list RPAREN LAMBDA block_statement
@@ -137,12 +126,10 @@ class Parser:
         else:
             p[0] = ('lambda_function', p[3], p[5], p[7])
 
-
     def p_opt_param_list(self, p):
         '''opt_param_list : param_list
                           | empty'''
         p[0] = p[1]  # list of parameters or None
-
 
     def p_param_list(self, p):
         '''param_list : param
@@ -174,8 +161,6 @@ class Parser:
             value = p[2][2]
             p[0] = VariableDeclarationNode(identifier, type_hint, value)
 
-
-
     # Variable Declaration
     def p_declaration_base(self, p):
         '''declaration_base : IDENTIFIER
@@ -198,15 +183,12 @@ class Parser:
             # IDENTIFIER typehint ASSIGN expression
             p[0] = (identifier, p[2], p[4])
 
-
     # Typehint
     def p_typehint(self, p):
         '''typehint : TYPEHINTCOLON type'''
         type_string = p[2]  # type
         meta_type = TypeRegistry.get_meta_type_by_name(type_string)
         p[0] = meta_type
-
-
 
     # Types
     def p_type(self, p):
@@ -235,7 +217,6 @@ class Parser:
         elif p[1] == 'false':
             p[0] = PrimitiveBoolNode(False)
 
-
     # Expressions. An Expression is a line that yields a value.
     # Some examples are function calls, arithmetic operations, etc.
     # With the precedence working I can use a single rule for all binary operations :)
@@ -263,10 +244,10 @@ class Parser:
         left = p[1]
         right = p[3]
 
-
         p[0] = BinaryOperationNode(operator, left, right)
 
-    def p_expression_unary(self, p): # Unary minus The %prec just applies the precedence to the rule UMINUS is not a tokren
+    def p_expression_unary(self,
+                           p):  # Unary minus The %prec just applies the precedence to the rule UMINUS is not a token
         '''expression : MINUS expression %prec UMINUS
                       | PLUS expression %prec UPLUS
                       | NOT expression
@@ -274,7 +255,6 @@ class Parser:
         operator = p[1]
         operand = p[2]
         p[0] = UnaryOperationNode(operator, operand)
-
 
     def p_control_flow(self, p):
         '''control_flow : conditional
@@ -321,11 +301,9 @@ class Parser:
         '''expression : expression TO_STREAM'''
         p[0] = UnaryOperationNode('to_stream', p[1])
 
-
     def p_expression_lambda(self, p):
         '''expression : lambda_function'''
         p[0] = p[1]
-
 
     # Conditional Statements
     def p_conditional(self, p):
@@ -335,7 +313,6 @@ class Parser:
             p[0] = IfNode(p[3], p[5])
         else:  # if with else
             p[0] = IfNode(p[3], p[5], p[7])
-
 
     # Loops
     def p_loop(self, p):
@@ -358,13 +335,10 @@ class Parser:
         '''assignment : IDENTIFIER ASSIGN expression'''
         p[0] = AssignmentNode(IdentifierNode(p[1]), p[3])
 
-
-
     # Empty Rule
     def p_empty(self, p):
         'empty :'
         p[0] = None  # Return None
-
 
     def p_error(self, p):  # This works but isnt how I like it
         if p:
@@ -376,14 +350,14 @@ class Parser:
 
             # Gen Line numbers of the context
             l_bound = line_num - 2 if line_num - 2 > 0 else 0
-            u_bound = line_num + 2 if line_num + 2 < len(string_lines) else len(string_lines)
+            u_bound = line_num + 2 if line_num + 2 < len(self.string_lines) else len(self.string_lines)
 
             # Print the context lines
             for i in range(l_bound, u_bound):
                 if i == line_num:
-                    print(f"{i}: {string_lines[i]} <---")
+                    print(f"{i}: {self.string_lines[i]} <---")
                 else:
-                    print(f"{i}: {string_lines[i]}")
+                    print(f"{i}: {self.string_lines[i]}")
 
             # Skip ahead to the next line
             while True:
@@ -393,15 +367,16 @@ class Parser:
         else:
             print("Syntax error at EOF")
 
-
     def __init__(self, **kwargs):
         self.parser = yacc.yacc(module=self, **kwargs)
         self.lexer = Lexer()
+        self.string_lines = []
 
     def parse(self, data, lexer=None, debug=False):
         if lexer is None:
             lexer = self.lexer
         return self.parser.parse(data, lexer=lexer, debug=debug)
+
 
 # Section: Testing and Debugging (Optional)
 if __name__ == "__main__":

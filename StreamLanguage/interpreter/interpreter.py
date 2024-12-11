@@ -24,8 +24,8 @@ class Interpreter:
         return self._parser
 
     def set_parser(self, parser):
-            self._parser = parser
-            return self._parser
+        self._parser = parser
+        return self._parser
 
     def __str__(self):
         return "Interpreter"

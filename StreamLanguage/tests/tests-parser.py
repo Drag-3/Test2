@@ -1,5 +1,5 @@
 # Sample strings to test with parser
-from parser import parse
+from StreamLanguage.parser import parse
 
 tests = [
     """

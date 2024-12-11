@@ -7,7 +7,7 @@ fn main() {
 
     while (guess != secret) {
         print("Enter your guess:");
-        guess = read_int(); // Assuming read_int() reads an integer from user input
+        guess = read_int(); // read_int() reads an integer from user input
 
         if (guess < secret) {
             print("Too low!");

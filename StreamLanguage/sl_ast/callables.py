@@ -1,5 +1,25 @@
+import contextlib
+from contextlib import contextmanager
+
 from StreamLanguage.sl_ast.exceptions import ReturnException, SLTypeError
 from StreamLanguage.exceptions import SLException
+
+
+@contextmanager
+def function_call_context(context, function, args):
+    """
+    Context manager to handle function call setup and teardown.
+    """
+    # Enter function call context
+    context.enter_function_call(function, args)
+    context.control_flow.reset()
+    try:
+        yield
+    except SLException as e:
+        handle_error(function, e, context)
+    finally:
+        context.control_flow.reset()
+        context.exit_function_call()
 
 
 class Callable:
@@ -87,10 +107,7 @@ class CallableFunction(Callable):
         """
         Invoke the function with the provided arguments within the given context.
         """
-        # Enter function call context
-        context.enter_function_call(self, args)
-        context.control_flow.reset()  # Reset control flow signals
-        try:
+        with function_call_context(context, self, args):
             # Evaluate each statement in the function body
             for node in self.body:
                 node.evaluate(context)
@@ -107,12 +124,6 @@ class CallableFunction(Callable):
                 if context.control_flow.should_break or context.control_flow.should_continue:
                     raise SLException("Invalid 'break' or 'continue' outside of a loop")
             return None  # Function completed without a return statement
-        except SLException as e:
-            context.exit_function_call()
-            raise e
-        finally:
-            context.control_flow.reset()  # Reset control flow signals
-            context.exit_function_call()
 
     def handle_return_metadata(self, metadata):
         # Process or log the metadata as needed
@@ -121,6 +132,7 @@ class CallableFunction(Callable):
 
         # Add a debug log with logging module
 
+
 def handle_error(self, e, context):
-        error_message = f"Error in function '{self.name}': {str(e)}"
-        raise SLException(error_message)
+    error_message = f"Error in function '{self.name}': {str(e)}"
+    raise SLException(error_message)
